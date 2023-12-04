@@ -12,7 +12,15 @@ import os
 import torch
 import torch.distributed as dist
 import timm.models.hub as timm_hub
+from deepspeed.accelerator import get_accelerator
 
+global dist
+
+def env2int(env_list, default=-1):
+    for e in env_list:
+        val = int(os.environ.get(e, -1))
+        if val >= 0: return val
+    return default
 
 def setup_for_distributed(is_master):
     """
@@ -54,7 +62,9 @@ def is_main_process():
     return get_rank() == 0
 
 
-def init_distributed_mode(args):
+def init_torch_distributed(args):
+    global dist
+    import torch.distributed as dist
     if args.distributed is False:
         print("Not using distributed mode")
         return
@@ -90,6 +100,7 @@ def init_distributed_mode(args):
         ),  # allow auto-downloading and de-compressing
     )
     torch.distributed.barrier()
+    get_accelerator().set_device(local_rank)
     setup_for_distributed(args.rank == 0)
 
 
@@ -106,6 +117,29 @@ def get_dist_info():
         world_size = 1
     return rank, world_size
 
+def print_rank_0(message):
+    if dist.get_rank() == 0:
+        print(message)
+def init_processes(local_rank, args):
+    if args.dist == 'deepspeed':
+        init_deepspeed_comm(args.backend)
+    elif args.dist == 'torch':
+        init_torch_distributed(args.backend)
+    else:
+        print_rank_0(f"distributed framework {args.dist} not supported")
+        exit(0)
+
+def init_deepspeed_comm(backend):
+    global dist
+    import deepspeed
+    import deepspeed.comm as dist
+    deepspeed.init_distributed(dist_backend=backend)
+    local_rank = int(os.environ['LOCAL_RANK'])
+    get_accelerator().set_device(local_rank)
+
+def sync_all():
+    get_accelerator().synchronize()
+    dist.barrier()
 
 def main_process(func):
     @functools.wraps(func)

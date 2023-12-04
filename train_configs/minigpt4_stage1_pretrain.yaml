@@ -36,7 +36,7 @@ run:
 
   weight_decay: 0.05
   max_epoch: 4
-  num_workers: 4
+  num_workers: 15
   warmup_steps: 5000
   iters_per_epoch: 5000
 
