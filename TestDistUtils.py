@@ -1,10 +1,7 @@
-# Copyright (c) Microsoft Corporation.
-# SPDX-License-Identifier: Apache-2.0
-
-# DeepSpeed Team
-
+import math
 import torch
 import sys, os, time
+import argparse
 
 
 
@@ -12,6 +9,139 @@ from minigpt4.common.dist_utils import *
 from deepspeed.accelerator import get_accelerator
 from deepspeed.comm import TorchBackend
 
+DEFAULT_WARMUPS = 5
+DEFAULT_TRIALS = 50
+DEFAULT_TYPE = 'float'
+DEFAULT_BACKEND = get_accelerator().communication_backend_name()
+DEFAULT_UNIT = 'Gbps'
+DEFAULT_DIST = 'deepspeed'
+DEFAULT_MAXSIZE = 24
+TORCH_DISTRIBUTED_DEFAULT_PORT = 29500
+
+def get_bw(comm_op, size, duration, args):
+    n = dist.get_world_size()
+    tput = 0
+    busbw = 0
+    if comm_op == "all_to_all":
+        tput = (size / duration)
+        busbw = (size / duration) * ((n - 1) / n)
+    elif comm_op == "all_gather":
+        size *= n
+        tput = (size / duration)
+        busbw = (size / duration) * ((n - 1) / n)
+    elif comm_op == "all_reduce":
+        tput = (size * 2 / duration)
+        busbw = (size / duration) * (2 * (n - 1) / n)
+    elif comm_op == "pt2pt" or comm_op == "broadcast":
+        tput = (size / duration)
+        busbw = tput
+    else:
+        print_rank_0("wrong comm_op specified")
+        exit(0)
+
+    if args.bw_unit == 'Gbps':
+        tput *= 8
+        busbw *= 8
+
+    return tput, busbw
+
+def convert_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return "%s %s" % (s, size_name[i])
+
+def get_metric_strings(args, tput, busbw, duration):
+    duration_ms = duration * 1e3
+    duration_us = duration * 1e6
+    tput = f'{tput / 1e9:.3f}'
+    busbw = f'{busbw /1e9:.3f}'
+
+    if duration_us < 1e3 or args.raw:
+        duration = f'{duration_us:.3f}'
+        if not args.raw:
+            duration += ' us'
+    else:
+        duration = f'{duration_ms:.3f} ms'
+    return tput, busbw, duration
+
+def max_numel(comm_op, dtype, mem_factor, local_rank, args):
+    dtype_size = _element_size(dtype)
+    max_memory_per_gpu = get_accelerator().total_memory(local_rank) * mem_factor
+    if comm_op == 'all_reduce' or comm_op == 'pt2pt' or comm_op == 'broadcast':
+        elements_per_gpu = int(max_memory_per_gpu // dtype_size)
+    elif comm_op == 'all_gather':
+        # all_gather performance is lower for non-powers of two, and the output buffer size scales with world size
+        # Therefore, divide by world size and round down to nearest power of 2
+        elements_per_gpu = int(max_memory_per_gpu // dtype_size // dist.get_world_size())
+        elements_per_gpu = int(pow(2, int(math.log(elements_per_gpu, 2))))
+    elif comm_op == 'all_to_all':
+        # Number of elements must be divisible by world_size
+        # all_to_all performance is lower for non-powers of two. Round down like all_gather.
+        elements_per_gpu = int(max_memory_per_gpu // dtype_size)
+        elements_per_gpu = int(dist.get_world_size() * round(elements_per_gpu / dist.get_world_size()))
+        elements_per_gpu = int(pow(2, int(math.log(elements_per_gpu, 2))))
+    else:
+        print(f"This communication operation: {comm_op} is not supported yet")
+        exit(0)
+    return elements_per_gpu
+
+def timed_all_gather(input, output, args):
+    if args.dist == 'torch':
+        import torch.distributed as dist
+
+        all_gather_func = TorchBackend.get_all_gather_function()
+    elif args.dist == 'deepspeed':
+        import deepspeed.comm as dist
+
+        all_gather_func = dist.allgather_fn
+
+    sync_all()
+    # Warmups, establish connections, etc.
+    for i in range(args.warmups):
+        all_gather_func(output, input, group=None, async_op=args.async_op)
+    sync_all()
+
+    # time the actual comm op trials times and average it
+    pre = time.perf_counter()
+    for i in range(args.trials):
+        all_gather_func(output, input, group=None, async_op=args.async_op)
+    sync_all()
+    duration = time.perf_counter() - pre
+
+    # maintain and clean performance data
+    avg_duration = duration / args.trials
+    size = input.element_size() * input.nelement()
+    tput, busbw = get_bw('all_gather', size, avg_duration, args)
+    tput_str, busbw_str, duration_str = get_metric_strings(args, tput, busbw, avg_duration)
+    desc = f'{input.nelement()}x{input.element_size()}'
+
+    if not args.raw:
+        size = convert_size(size)
+
+    print_rank_0(f"{size:<20} {desc:25s} {duration_str:20s} {tput_str:20s} {busbw_str:20s}")
+
+
+
+def _element_size(dtype):
+    """
+    Returns the element size for a dtype, in bytes
+    """
+    if not isinstance(dtype, torch.dtype):
+        raise RuntimeError(f'expected torch.dtype, but got {type(dtype)}')
+
+    if dtype.is_complex:
+        return torch.finfo(dtype).bits >> 2
+    elif dtype.is_floating_point:
+        return torch.finfo(dtype).bits >> 3
+    elif dtype == torch.bool:
+        # NOTE: torch.bool is not supported in torch.iinfo()
+        return 1
+    else:
+        return torch.iinfo(dtype).bits >> 3
 
 def run_all_gather(local_rank, args):
     if args.dist == 'torch':
@@ -20,7 +150,7 @@ def run_all_gather(local_rank, args):
         import deepspeed.comm as dist
 
     # Prepare benchmark header
-    print_header(args, 'all_gather')
+   # print_header(args, 'all_gather')
     global_rank = dist.get_rank()
     world_size = dist.get_world_size()
 
