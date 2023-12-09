@@ -121,6 +121,7 @@ def print_rank_0(message):
     if dist.get_rank() == 0:
         print(message)
 def init_processes(args):
+    args.backend = "nccl"
     if args.dist_backend == 'deepspeed':
         init_deepspeed_comm(args.backend)
     elif args.dist_backend == 'torch':
