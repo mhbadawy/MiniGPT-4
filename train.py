@@ -91,6 +91,56 @@ def main():
     task = tasks.setup_task(cfg)
     datasets = task.build_datasets(cfg)
     model = task.build_model(cfg)
+    ds_config = {
+  "train_batch_size": 16,
+  "steps_per_print": 2000,
+  "optimizer": {
+    "type": "Adam",
+    "params": {
+      "lr": 0.001,
+      "betas": [
+        0.8,
+        0.999
+      ],
+      "eps": 1e-8,
+      "weight_decay": 3e-7
+    }
+  },
+  "scheduler": {
+    "type": "WarmupLR",
+    "params": {
+      "warmup_min_lr": 0,
+      "warmup_max_lr": 0.001,
+      "warmup_num_steps": 1000
+    }
+  },
+  "gradient_clipping": 1.0,
+  "prescale_gradients": False,
+  "bf16": {
+      "enabled": args.dtype == "bf16"
+  },
+  "fp16": {
+      "enabled": args.dtype == "fp16",
+      "fp16_master_weights_and_grads": False,
+      "loss_scale": 0,
+      "loss_scale_window": 500,
+      "hysteresis": 2,
+      "min_loss_scale": 1,
+      "initial_scale_power": 15
+  },
+  "wall_clock_breakdown": False,
+  "zero_optimization": {
+      "stage": args.stage,
+      "allgather_partitions": True,
+      "reduce_scatter": True,
+      "allgather_bucket_size": 50000000,
+      "reduce_bucket_size": 50000000,
+      "overlap_comm": True,
+      "contiguous_gradients": True,
+      "cpu_offload": False
+  }
+}
+
     model_engine, optimizer, trainloader, __ = deepspeed.initialize(
         args=args, model=model, model_parameters=model.params, training_data=datasets['train'], config=ds_config)
 
@@ -99,10 +149,10 @@ def main():
         wandb.init(project="minigptv", name=cfg.run_cfg.job_name)
         wandb.watch(model)
 
-    runner = get_runner_class(cfg)(
-        cfg=cfg, job_id=job_id, task=task, model=model_engine, datasets=datasets, optimizer=optimizer
-    )
-    runner.train()
+#    runner = get_runner_class(cfg)(
+ #       cfg=cfg, job_id=job_id, task=task, model=model_engine, datasets=datasets, optimizer=optimizer
+  #  )
+   # runner.train()
 
 
 if __name__ == "__main__":
