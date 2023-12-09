@@ -117,10 +117,10 @@ def main():
   "gradient_clipping": 1.0,
   "prescale_gradients": False,
   "bf16": {
-      "enabled": args.dtype == "bf16"
+      "enabled": False
   },
   "fp16": {
-      "enabled": args.dtype == "fp16",
+      "enabled": False,
       "fp16_master_weights_and_grads": False,
       "loss_scale": 0,
       "loss_scale_window": 500,
@@ -129,16 +129,16 @@ def main():
       "initial_scale_power": 15
   },
   "wall_clock_breakdown": False,
-  "zero_optimization": {
-      "stage": args.stage,
-      "allgather_partitions": True,
-      "reduce_scatter": True,
-      "allgather_bucket_size": 50000000,
-      "reduce_bucket_size": 50000000,
-      "overlap_comm": True,
-      "contiguous_gradients": True,
-      "cpu_offload": False
-  }
+  # "zero_optimization": {
+  #     "stage": args.stage,
+  #     "allgather_partitions": True,
+  #     "reduce_scatter": True,
+  #     "allgather_bucket_size": 50000000,
+  #     "reduce_bucket_size": 50000000,
+  #     "overlap_comm": True,
+  #     "contiguous_gradients": True,
+  #     "cpu_offload": False
+  # }
 }
 
     model_engine, optimizer, trainloader, __ = deepspeed.initialize(
