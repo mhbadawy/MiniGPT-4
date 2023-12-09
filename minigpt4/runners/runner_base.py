@@ -43,7 +43,7 @@ class RunnerBase:
     will support other distributed frameworks.
     """
 
-    def __init__(self, cfg, task, model, datasets, job_id):
+    def __init__(self, cfg, task, model, datasets, job_id, optimizer, trainloader):
         self.config = cfg
         self.job_id = job_id
 
@@ -54,9 +54,9 @@ class RunnerBase:
 
         self._wrapped_model = None
         self._device = None
-        self._optimizer = None
+        self._optimizer = optimizer
         self._scaler = None
-        self._dataloaders = None
+        self._dataloaders = IterLoader(trainloader)
         self._lr_sched = None
 
         self.start_epoch = 0

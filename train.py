@@ -9,6 +9,9 @@ import argparse
 import os
 import random
 
+import deepspeed
+from deepspeed.accelerator import get_accelerator
+
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
@@ -88,6 +91,8 @@ def main():
     task = tasks.setup_task(cfg)
     datasets = task.build_datasets(cfg)
     model = task.build_model(cfg)
+    model_engine, optimizer, trainloader, __ = deepspeed.initialize(
+        args=args, model=model, model_parameters=model.params, training_data=datasets['train'], config=ds_config)
 
     if cfg.run_cfg.wandb_log:
         wandb.login()
@@ -95,7 +100,7 @@ def main():
         wandb.watch(model)
 
     runner = get_runner_class(cfg)(
-        cfg=cfg, job_id=job_id, task=task, model=model, datasets=datasets
+        cfg=cfg, job_id=job_id, task=task, model=model_engine, datasets=datasets, optimizer=optimizer
     )
     runner.train()
 
