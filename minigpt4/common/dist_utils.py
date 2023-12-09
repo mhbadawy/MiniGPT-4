@@ -120,10 +120,10 @@ def get_dist_info():
 def print_rank_0(message):
     if dist.get_rank() == 0:
         print(message)
-def init_processes(local_rank, args):
-    if args.dist == 'deepspeed':
+def init_processes(args):
+    if args.dist_backend == 'deepspeed':
         init_deepspeed_comm(args.backend)
-    elif args.dist == 'torch':
+    elif args.dist_backend == 'torch':
         init_torch_distributed(args.backend)
     else:
         print_rank_0(f"distributed framework {args.dist} not supported")

@@ -442,6 +442,7 @@ def create_runner_config_validator():
         help="Number of processes participating in the job.",
     )
     validator.add_argument("dist_url", type=str)
+    validator.add_argument("dist_backend", type=str)
     validator.add_argument("distributed", type=bool)
     # add arguments to opt using distributed sampler during evaluation or not
     validator.add_argument(
