@@ -141,8 +141,40 @@ def main():
   # }
 }
 
-    model_engine, optimizer, trainloader, __ = deepspeed.initialize(
-        args=args, model=model, model_parameters=model.params, training_data=datasets['train'], config=ds_config)
+    print(model)
+    print(model.named_parameters())
+    param_optimizer = list(model.named_parameters())
+    print(param_optimizer)
+    param_optimizer = [n for n in param_optimizer if 'pooler' not in n[0]]
+    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
+    no_decay = no_decay + [
+            'attn_nw', 'attn_nb', 'norm_w', 'norm_b', 'attn_qkvb', 'attn_ob',
+            'inter_b', 'output_b'
+        ]
+    if "weight_decay" in cfg.run_cfg.keys():
+        weight_decay = cfg.run_cfg.weight_decay
+    else:
+        weight_decay = 0.01
+    if ds_config["optimizer"]["type"] not in [ "OneBitAdam", "OneBitLamb", "ZeroOneAdam"]:
+        optimizer_grouped_parameters = [{
+            'params': [
+                p for n, p in param_optimizer
+                if not any(nd in n for nd in no_decay)
+            ],
+            'weight_decay':
+            weight_decay
+        }, {
+            'params':
+            [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
+            'weight_decay':
+            0.0
+        }]
+    print(datasets)
+    model_engine, optimizer, __ = deepspeed.initialize(
+        args=args, model=model, model_parameters=param_optimizer, config=ds_config)
+    print(model_engine)
+    print(optimizer)
+    
 
     if cfg.run_cfg.wandb_log:
         wandb.login()
