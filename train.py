@@ -170,8 +170,27 @@ def main():
             0.0
         }]
     print(datasets)
+    num_parameters = 0
+    p_wd, p_non_wd = [], []
+    for n, p in self.model.named_parameters():
+        if not p.requires_grad:
+            continue  # frozen weights
+        print(n)
+        if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
+            p_non_wd.append(p)
+        else:
+            p_wd.append(p)
+        num_parameters += p.data.nelement()
+    logging.info("number of trainable parameters: %d" % num_parameters)
+    optim_params = [
+        {
+            "params": p_wd,
+            "weight_decay": float(self.config.run_cfg.weight_decay),
+        },
+        {"params": p_non_wd, "weight_decay": 0},
+    ]
     model_engine, optimizer, __ = deepspeed.initialize(
-        args=args, model=model, model_parameters=param_optimizer, config=ds_config)
+        args=args, model=model, model_parameters=optim_params, config=ds_config)
     print(model_engine)
     print(optimizer)
     
