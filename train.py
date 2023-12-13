@@ -143,7 +143,7 @@ def main():
 
     num_parameters = 0
     p_wd, p_non_wd = [], []
-    for n, p in self.model.named_parameters():
+    for n, p in model.named_parameters():
         if not p.requires_grad:
             continue  # frozen weights
         print(n)
@@ -170,9 +170,9 @@ def main():
         wandb.init(project="minigptv", name=cfg.run_cfg.job_name)
         wandb.watch(model)
 
-#    runner = get_runner_class(cfg)(
- #       cfg=cfg, job_id=job_id, task=task, model=model_engine, datasets=datasets, optimizer=optimizer
-  #  )
+    runner = get_runner_class(cfg)(
+        cfg=cfg, job_id=job_id, task=task, model=model_engine, datasets=datasets, optimizer=optimizer
+    )
    # runner.train()
 
 
