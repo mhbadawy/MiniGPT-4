@@ -117,9 +117,7 @@ def get_dist_info():
         world_size = 1
     return rank, world_size
 
-def print_rank_0(message):
-    if dist.get_rank() == 0:
-        print(message)
+
 def init_processes(args):
     args.backend = "nccl"
     if args.dist_backend == 'deepspeed':
@@ -127,7 +125,7 @@ def init_processes(args):
     elif args.dist_backend == 'torch':
         init_torch_distributed(args.backend)
     else:
-        print_rank_0(f"distributed framework {args.dist} not supported")
+        print(f"distributed framework {args.dist_backend} not supported")
         exit(0)
 
 def init_deepspeed_comm(backend):
@@ -138,9 +136,6 @@ def init_deepspeed_comm(backend):
     local_rank = int(os.environ['LOCAL_RANK'])
     get_accelerator().set_device(local_rank)
 
-def sync_all():
-    get_accelerator().synchronize()
-    dist.barrier()
 
 def main_process(func):
     @functools.wraps(func)
