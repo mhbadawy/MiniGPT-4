@@ -251,5 +251,6 @@ def parser():
 if __name__ == "__main__":
     args = parser().parse_args()
     rank = args.local_rank
-    init_processes(local_rank=rank, args=args)
+    args.dist_backend = args.dist
+    init_processes(args=args)
     run_all_gather(local_rank=rank, args=args)
