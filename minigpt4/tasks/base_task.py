@@ -247,7 +247,7 @@ class BaseTask:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-        metric_logger.update(samplesPersec=num_of_samples/total_step_time)
+            metric_logger.update(samplesPersec=num_of_samples/total_step_time)
 
 
 
