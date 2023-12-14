@@ -209,6 +209,8 @@ class BaseTask:
             # metric_logger.log_every(range(data_loader), 1, header_new)
             samples = next(data_loader)
             num_of_samples = len(samples)
+            print('NUMBER OF SAMPLES')
+            print(num_of_samples)
             samples = prepare_sample(samples, cuda_enabled=cuda_enabled)
             samples.update(
                 {
@@ -240,11 +242,11 @@ class BaseTask:
                 optimizer.zero_grad()
                 # if self.cfg.wandb_log:
                 ## TIME
-                step_time = time.time() - start_time
-                total_step_time += step_time
 
                 if self.cfg.run_cfg.wandb_log:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
+            step_time = time.time() - start_time
+            total_step_time += step_time
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
             metric_logger.update(samplesPersec=num_of_samples/total_step_time)
