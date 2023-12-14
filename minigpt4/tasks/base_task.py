@@ -15,6 +15,7 @@ from minigpt4.common.logger import MetricLogger, SmoothedValue
 from minigpt4.common.registry import registry
 from minigpt4.datasets.data_utils import prepare_sample
 import wandb
+import time
 
 class BaseTask:
     def __init__(self, **kwargs):
@@ -183,6 +184,7 @@ class BaseTask:
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=1, fmt="{value:.4f}"))
+        metric_logger.add_meter("samplesPersec", SmoothedValue(window_size=1, fmt="{value:.4f}"))
 
         # if iter-based runner, schedule lr based on inner epoch.
         logging.info(
@@ -190,6 +192,7 @@ class BaseTask:
                 epoch, iters_per_epoch
             )
         )
+        header_new = "Samples; data epoch: [{}]".format(epoch)
         header = "Train: data epoch: [{}]".format(epoch)
         if start_iters is None:
             # epoch-based runner
@@ -203,9 +206,9 @@ class BaseTask:
             # if using iter-based runner, we stop after iters_per_epoch iterations.
             if i >= iters_per_epoch:
                 break
-
+            # metric_logger.log_every(range(data_loader), 1, header_new)
             samples = next(data_loader)
-
+            num_of_samples = len(samples)
             samples = prepare_sample(samples, cuda_enabled=cuda_enabled)
             samples.update(
                 {
@@ -216,7 +219,8 @@ class BaseTask:
             )
 
             lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
-
+            ##TIME
+            start_time = time.time()
             with torch.cuda.amp.autocast(enabled=use_amp):
                 loss = self.train_step(model=model, samples=samples)
 
@@ -235,10 +239,17 @@ class BaseTask:
                     optimizer.step()
                 optimizer.zero_grad()
                 # if self.cfg.wandb_log:
+                ## TIME
+                end_time = time.time()
+                total_time = end_time - start_time
+
                 if self.cfg.run_cfg.wandb_log:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+            metric_logger.update(samplesPersec=num_of_samples/total_time)
+
+
 
         # after train_epoch()
         # gather the stats from all processes
