@@ -185,7 +185,7 @@ class BaseTask:
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         metric_logger.add_meter("samplesPersec", SmoothedValue(window_size=1, fmt="{value:.4f}"))
-
+        total_step_time = 0
         # if iter-based runner, schedule lr based on inner epoch.
         logging.info(
             "Start training epoch {}, {} iters per inner epoch.".format(
@@ -234,20 +234,20 @@ class BaseTask:
             if (i + 1) % accum_grad_iters == 0:
                 if use_amp:
                     scaler.step(optimizer)
-                    scaler.update()                     
-                else:    
+                    scaler.update()
+                else:
                     optimizer.step()
                 optimizer.zero_grad()
                 # if self.cfg.wandb_log:
                 ## TIME
-                end_time = time.time()
-                total_time = end_time - start_time
+                step_time = time.time() - start_time
+                total_step_time += step_time
 
                 if self.cfg.run_cfg.wandb_log:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-            metric_logger.update(samplesPersec=num_of_samples/total_time)
+        metric_logger.update(samplesPersec=num_of_samples/total_step_time)
 
 
 
