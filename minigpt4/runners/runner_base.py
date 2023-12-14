@@ -43,7 +43,7 @@ class RunnerBase:
     will support other distributed frameworks.
     """
 
-    def __init__(self, cfg, task, model, datasets, job_id, optimizer, trainloader):
+    def __init__(self, cfg, task, model, datasets, job_id, optimizer):
         self.config = cfg
         self.job_id = job_id
 
@@ -56,7 +56,7 @@ class RunnerBase:
         self._device = None
         self._optimizer = optimizer
         self._scaler = None
-        self._dataloaders = IterLoader(trainloader)
+        self._dataloaders = None
         self._lr_sched = None
 
         self.start_epoch = 0
@@ -81,19 +81,19 @@ class RunnerBase:
         A property to get the DDP-wrapped model on the device.
         """
         # move model to device
-        if self._model.device != self.device:
-            self._model = self._model.to(self.device)
+        # if self._model.device != self.device:
+        #     self._model = self._model.to(self.device)
+        #
+        #     # distributed training wrapper
+        #     if self.use_distributed:
+        #         if self._wrapped_model is None:
+        #             self._wrapped_model = DDP(
+        #                 self._model, device_ids=[self.config.run_cfg.gpu], find_unused_parameters=True
+        #             )
+        #     else:
+        #         self._wrapped_model = self._model
 
-            # distributed training wrapper
-            if self.use_distributed:
-                if self._wrapped_model is None:
-                    self._wrapped_model = DDP(
-                        self._model, device_ids=[self.config.run_cfg.gpu], find_unused_parameters=True
-                    )
-            else:
-                self._wrapped_model = self._model
-
-        return self._wrapped_model
+        return self._model
 
     @property
     def optimizer(self):

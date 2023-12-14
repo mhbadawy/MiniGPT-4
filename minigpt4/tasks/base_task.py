@@ -113,7 +113,7 @@ class BaseTask:
         log_freq=50,
         accum_grad_iters=1,
     ):
-        return self._train_inner_loop(
+        return self._ds_train_inner_loop(
             epoch=epoch,
             iters_per_epoch=lr_scheduler.iters_per_epoch,
             model=model,
@@ -140,7 +140,7 @@ class BaseTask:
         log_freq=50,
         accum_grad_iters=1,
     ):
-        return self._train_inner_loop(
+        return self._ds_train_inner_loop(
             epoch=epoch,
             start_iters=start_iters,
             iters_per_epoch=iters_per_inner_epoch,
