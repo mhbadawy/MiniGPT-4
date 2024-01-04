@@ -33,6 +33,7 @@ from minigpt4.datasets.datasets.dataloader_utils import (
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
+import deepspeed as ds
 
 @registry.register_runner("runner_base")
 class RunnerBase:
@@ -576,28 +577,32 @@ class RunnerBase:
         """
         Save the checkpoint at the current epoch.
         """
-        model_no_ddp = self.unwrap_dist_model(self.model)
-        param_grad_dic = {
-            k: v.requires_grad for (k, v) in model_no_ddp.named_parameters()
-        }
-        state_dict = model_no_ddp.state_dict()
-        for k in list(state_dict.keys()):
-            if k in param_grad_dic.keys() and not param_grad_dic[k]:
-                # delete parameters that do not require gradient
-                del state_dict[k]
-        save_obj = {
-            "model": state_dict,
-            "optimizer": self.optimizer.state_dict(),
-            "config": self.config.to_dict(),
-            "scaler": self.scaler.state_dict() if self.scaler else None,
-            "epoch": cur_epoch,
-        }
         save_to = os.path.join(
             self.output_dir,
             "checkpoint_{}.pth".format("best" if is_best else cur_epoch),
         )
+        if isinstance(self.model, ds.DeepSpeedEngine):
+            self.model.save_checkpoint(save_dir=save_to, tag=cur_epoch, exclude_frozen_parameters=True)
+        else:
+            model_no_ddp = self.unwrap_dist_model(self.model)
+            param_grad_dic = {
+                k: v.requires_grad for (k, v) in model_no_ddp.named_parameters()
+            }
+            state_dict = model_no_ddp.state_dict()
+            for k in list(state_dict.keys()):
+                if k in param_grad_dic.keys() and not param_grad_dic[k]:
+                    # delete parameters that do not require gradient
+                    del state_dict[k]
+            save_obj = {
+                "model": state_dict,
+                "optimizer": self.optimizer.state_dict(),
+                "config": self.config.to_dict(),
+                "scaler": self.scaler.state_dict() if self.scaler else None,
+                "epoch": cur_epoch,
+            }
+            torch.save(save_obj, save_to)
         logging.info("Saving checkpoint at epoch {} to {}.".format(cur_epoch, save_to))
-        torch.save(save_obj, save_to)
+
 
     def _reload_best_model(self, model):
         """
