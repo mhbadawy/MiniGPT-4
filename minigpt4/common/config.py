@@ -84,7 +84,7 @@ class Config:
 
     @staticmethod
     def build_runner_config(config):
-        ds_config_path = config.run.ds_config
+        ds_config_path = config.run.ds_config_path
         # hierarchy override, customized config > default config
         ds_config = OmegaConf.load(ds_config_path)
 

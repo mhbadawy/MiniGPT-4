@@ -54,7 +54,7 @@ run:
   dist_url: "env://"
   distributed: True
   dist_backend: deepspeed
-  ds_config: ""
+  ds_config_path: "/ibex/user/badawimh/deepspeed/new/MiniGPT-4/train_configs/deepspeed_config.yaml"
 
   wandb_log: True
   job_name: minigpt4_pretrain
