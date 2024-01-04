@@ -38,7 +38,7 @@ class Config:
 
         # Override the default configuration with user options.
         self.config = OmegaConf.merge(
-            runner_config, model_config, dataset_config,evaluation_dataset_config, user_config
+            runner_config, model_config, dataset_config, evaluation_dataset_config, user_config
         )
 
     def _validate_runner_config(self, runner_config):
@@ -83,7 +83,11 @@ class Config:
 
     @staticmethod
     def build_runner_config(config):
-        return {"run": config.run}
+        ds_config_path = config.run.ds_config
+        # hierarchy override, customized config > default config
+        ds_config = OmegaConf.load(ds_config_path)
+
+        return {"run": config.run, "ds_config": ds_config}
 
     @staticmethod
     def build_dataset_config(config):
@@ -111,7 +115,6 @@ class Config:
             )
 
         return dataset_config
-
 
     @staticmethod
     def build_evaluation_dataset_config(config):
@@ -257,7 +260,7 @@ class ConfigValidator:
         """
         for k, v in config.items():
             assert (
-                k in self.arguments
+                    k in self.arguments
             ), f"""{k} is not a valid argument. Support arguments are {self.format_arguments()}."""
 
             if self.arguments[k].type is not None:
@@ -268,7 +271,7 @@ class ConfigValidator:
 
             if self.arguments[k].choices is not None:
                 assert (
-                    v in self.arguments[k].choices
+                        v in self.arguments[k].choices
                 ), f"""{k} must be one of {self.arguments[k].choices}."""
 
         return config
