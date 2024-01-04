@@ -53,7 +53,7 @@ class RunnerBase:
         self.datasets = datasets
 
         self._model = model
-        self.dist_backend = cfg.run.dist_backend
+        self.dist_backend = cfg.run_cfg.dist_backend
         if self.dist_backend == "deepspeed":
             self.ds_config = cfg.ds_cfg
         else:
