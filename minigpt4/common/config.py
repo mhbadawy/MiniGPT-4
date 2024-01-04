@@ -44,6 +44,7 @@ class Config:
     def _validate_runner_config(self, runner_config):
         """
         This method validates the configuration, such that
+        This method validates the configuration, such that
             1) all the user specified options are valid;
             2) no type mismatches between the user specified options and the config.
         """
@@ -158,6 +159,10 @@ class Config:
     @property
     def run_cfg(self):
         return self.config.run
+
+    @property
+    def ds_cfg(self):
+        return self.config.run.ds_config
 
     @property
     def datasets_cfg(self):
