@@ -80,99 +80,50 @@ def main():
     job_id = now()
     args = parse_args()
     cfg = Config(args)
-
-    init_processes(cfg.run_cfg)
+    print(cfg)
+    # init_processes(cfg.run_cfg)
     setup_seeds(cfg)
 
     # set after init_distributed_mode() to only log on master.
     setup_logger()
     cfg.pretty_print()
 
-    task = tasks.setup_task(cfg)
-    datasets = task.build_datasets(cfg)
-    model = task.build_model(cfg)
-    ds_config = {
-  "train_batch_size": 16,
-  "steps_per_print": 2000,
-  "optimizer": {
-    "type": "Adam",
-    "params": {
-      "lr": 0.001,
-      "betas": [
-        0.8,
-        0.999
-      ],
-      "eps": 1e-8,
-      "weight_decay": 3e-7
-    }
-  },
-  "scheduler": {
-    "type": "WarmupLR",
-    "params": {
-      "warmup_min_lr": 0,
-      "warmup_max_lr": 0.001,
-      "warmup_num_steps": 1000
-    }
-  },
-  "gradient_clipping": 1.0,
-  "prescale_gradients": False,
-  "bf16": {
-      "enabled": False
-  },
-  "fp16": {
-      "enabled": False,
-      "fp16_master_weights_and_grads": False,
-      "loss_scale": 0,
-      "loss_scale_window": 500,
-      "hysteresis": 2,
-      "min_loss_scale": 1,
-      "initial_scale_power": 15
-  },
-  "wall_clock_breakdown": False,
-  # "zero_optimization": {
-  #     "stage": args.stage,
-  #     "allgather_partitions": True,
-  #     "reduce_scatter": True,
-  #     "allgather_bucket_size": 50000000,
-  #     "reduce_bucket_size": 50000000,
-  #     "overlap_comm": True,
-  #     "contiguous_gradients": True,
-  #     "cpu_offload": False
-  # }
-}
+    # task = tasks.setup_task(cfg)
+    # datasets = task.build_datasets(cfg)
+    # model = task.build_model(cfg)
 
-    num_parameters = 0
-    p_wd, p_non_wd = [], []
-    for n, p in model.named_parameters():
-        if not p.requires_grad:
-            continue  # frozen weights
-        print(n)
-        if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
-            p_non_wd.append(p)
-        else:
-            p_wd.append(p)
-        num_parameters += p.data.nelement()
-    optim_params = [
-        {
-            "params": p_wd,
-            "weight_decay": float(cfg.run_cfg.weight_decay),
-        },
-        {"params": p_non_wd, "weight_decay": 0},
-    ]
-    model_engine, optimizer, __ , __ = deepspeed.initialize(
-        args=args, model=model, model_parameters=optim_params, config=ds_config)
-    print(model_engine)
-    print(optimizer)
-    
-
-    if cfg.run_cfg.wandb_log:
-        wandb.login()
-        wandb.init(project="minigptv", name=cfg.run_cfg.job_name)
-        wandb.watch(model)
-
-    runner = get_runner_class(cfg)(
-        cfg=cfg, job_id=job_id, task=task, model=model_engine, datasets=datasets, optimizer=optimizer
-    )
+    # num_parameters = 0
+    # p_wd, p_non_wd = [], []
+    # for n, p in model.named_parameters():
+    #     if not p.requires_grad:
+    #         continue  # frozen weights
+    #     print(n)
+    #     if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
+    #         p_non_wd.append(p)
+    #     else:
+    #         p_wd.append(p)
+    #     num_parameters += p.data.nelement()
+    # optim_params = [
+    #     {
+    #         "params": p_wd,
+    #         "weight_decay": float(cfg.run_cfg.weight_decay),
+    #     },
+    #     {"params": p_non_wd, "weight_decay": 0},
+    # ]
+    # model_engine, optimizer, __ , __ = deepspeed.initialize(
+    #     args=args, model=model, model_parameters=optim_params, config=ds_config)
+    # print(model_engine)
+    # print(optimizer)
+    #
+    #
+    # if cfg.run_cfg.wandb_log:
+    #     wandb.login()
+    #     wandb.init(project="minigptv", name=cfg.run_cfg.job_name)
+    #     wandb.watch(model)
+    #
+    # runner = get_runner_class(cfg)(
+    #     cfg=cfg, job_id=job_id, task=task, model=model_engine, datasets=datasets, optimizer=optimizer
+    # )
    # runner.train()
 
 
