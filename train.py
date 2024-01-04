@@ -44,8 +44,8 @@ def parse_args():
         "--options",
         nargs="+",
         help="override some settings in the used config, the key-value pair "
-        "in xxx=yyy format will be merged into config file (deprecate), "
-        "change to --cfg-options instead.",
+             "in xxx=yyy format will be merged into config file (deprecate), "
+             "change to --cfg-options instead.",
     )
     args = parser.parse_args()
 
@@ -80,51 +80,25 @@ def main():
     job_id = now()
     args = parse_args()
     cfg = Config(args)
-    print(cfg)
-    # init_processes(cfg.run_cfg)
+    init_processes(cfg.run_cfg)
     setup_seeds(cfg)
 
     # set after init_distributed_mode() to only log on master.
     setup_logger()
     cfg.pretty_print()
 
-    # task = tasks.setup_task(cfg)
-    # datasets = task.build_datasets(cfg)
-    # model = task.build_model(cfg)
+    task = tasks.setup_task(cfg)
+    datasets = task.build_datasets(cfg)
+    model = task.build_model(cfg)
 
-    # num_parameters = 0
-    # p_wd, p_non_wd = [], []
-    # for n, p in model.named_parameters():
-    #     if not p.requires_grad:
-    #         continue  # frozen weights
-    #     print(n)
-    #     if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
-    #         p_non_wd.append(p)
-    #     else:
-    #         p_wd.append(p)
-    #     num_parameters += p.data.nelement()
-    # optim_params = [
-    #     {
-    #         "params": p_wd,
-    #         "weight_decay": float(cfg.run_cfg.weight_decay),
-    #     },
-    #     {"params": p_non_wd, "weight_decay": 0},
-    # ]
-    # model_engine, optimizer, __ , __ = deepspeed.initialize(
-    #     args=args, model=model, model_parameters=optim_params, config=ds_config)
-    # print(model_engine)
-    # print(optimizer)
-    #
-    #
-    # if cfg.run_cfg.wandb_log:
-    #     wandb.login()
-    #     wandb.init(project="minigptv", name=cfg.run_cfg.job_name)
-    #     wandb.watch(model)
-    #
-    # runner = get_runner_class(cfg)(
-    #     cfg=cfg, job_id=job_id, task=task, model=model_engine, datasets=datasets, optimizer=optimizer
-    # )
-   # runner.train()
+    if cfg.run_cfg.wandb_log:
+        wandb.login()
+        wandb.init(project="minigptv", name=cfg.run_cfg.job_name)
+        wandb.watch(model)
+
+    runner = get_runner_class(cfg)(
+        cfg=cfg, job_id=job_id, task=task, model=model, datasets=datasets)
+    runner.train()
 
 
 if __name__ == "__main__":

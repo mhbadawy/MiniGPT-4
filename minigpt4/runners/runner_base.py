@@ -35,6 +35,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 import deepspeed as ds
 
+
 @registry.register_runner("runner_base")
 class RunnerBase:
     """
@@ -44,7 +45,7 @@ class RunnerBase:
     will support other distributed frameworks.
     """
 
-    def __init__(self, cfg, task, model, datasets, job_id, optimizer):
+    def __init__(self, cfg, task, model, datasets, job_id):
         self.config = cfg
         self.job_id = job_id
 
@@ -52,10 +53,15 @@ class RunnerBase:
         self.datasets = datasets
 
         self._model = model
+        self.dist_backend = cfg.run.dist_backend
+        if self.dist_backend == "deepspeed":
+            self.ds_config = cfg.ds_cfg
+        else:
+            self.ds_config = None
 
         self._wrapped_model = None
         self._device = None
-        self._optimizer = optimizer
+        self._optimizer = None
         self._scaler = None
         self._dataloaders = None
         self._lr_sched = None
@@ -82,19 +88,23 @@ class RunnerBase:
         A property to get the DDP-wrapped model on the device.
         """
         # move model to device
-        # if self._model.device != self.device:
-        #     self._model = self._model.to(self.device)
-        #
-        #     # distributed training wrapper
-        #     if self.use_distributed:
-        #         if self._wrapped_model is None:
-        #             self._wrapped_model = DDP(
-        #                 self._model, device_ids=[self.config.run_cfg.gpu], find_unused_parameters=True
-        #             )
-        #     else:
-        #         self._wrapped_model = self._model
+        if self.dist_backend == "deepspeed":
+            self._wrapped_model, self._optimizer, __, __ = deepspeed.initialize(
+                model=self._model, config=self.ds_config)
+        else:
+            if self._model.device != self.device:
+                self._model = self._model.to(self.device)
 
-        return self._model
+                # distributed training wrapper
+                if self.use_distributed:
+                    if self._wrapped_model is None:
+                        self._wrapped_model = DDP(
+                            self._model, device_ids=[self.config.run_cfg.gpu], find_unused_parameters=True
+                        )
+                else:
+                    self._wrapped_model = self._model
+
+        return self._wrapped_model
 
     @property
     def optimizer(self):
@@ -216,7 +226,7 @@ class RunnerBase:
             # print dataset statistics after concatenation/chaining
             for split_name in self.datasets:
                 if isinstance(self.datasets[split_name], tuple) or isinstance(
-                    self.datasets[split_name], list
+                        self.datasets[split_name], list
                 ):
                     # mixed wds.DataPipeline and torch.utils.data.Dataset
                     num_records = sum(
@@ -389,7 +399,7 @@ class RunnerBase:
                     if val_log is not None:
                         if is_main_process():
                             assert (
-                                "agg_metrics" in val_log
+                                    "agg_metrics" in val_log
                             ), "No agg_metrics found in validation log."
 
                             agg_metrics = val_log["agg_metrics"]
@@ -489,13 +499,13 @@ class RunnerBase:
             return model
 
     def create_loaders(
-        self,
-        datasets,
-        num_workers,
-        batch_sizes,
-        is_trains,
-        collate_fns,
-        dataset_ratios=None,
+            self,
+            datasets,
+            num_workers,
+            batch_sizes,
+            is_trains,
+            collate_fns,
+            dataset_ratios=None,
     ):
         """
         Create dataloaders for training and validation.
@@ -504,7 +514,7 @@ class RunnerBase:
         def _create_loader(dataset, num_workers, bsz, is_train, collate_fn):
             # create a single dataloader for each split
             if isinstance(dataset, ChainDataset) or isinstance(
-                dataset, wds.DataPipeline
+                    dataset, wds.DataPipeline
             ):
                 # wds.WebdDataset instance are chained together
                 # webdataset.DataPipeline has its own sampler and collate_fn
@@ -553,7 +563,7 @@ class RunnerBase:
         loaders = []
 
         for dataset, bsz, is_train, collate_fn in zip(
-            datasets, batch_sizes, is_trains, collate_fns
+                datasets, batch_sizes, is_trains, collate_fns
         ):
             if isinstance(dataset, list) or isinstance(dataset, tuple):
                 if hasattr(dataset[0], 'sample_ratio') and dataset_ratios is None:
@@ -603,7 +613,6 @@ class RunnerBase:
             torch.save(save_obj, save_to)
         logging.info("Saving checkpoint at epoch {} to {}.".format(cur_epoch, save_to))
 
-
     def _reload_best_model(self, model):
         """
         Load the best checkpoint for evaluation.
@@ -639,7 +648,7 @@ class RunnerBase:
             raise RuntimeError("checkpoint url or path is invalid")
 
         state_dict = checkpoint["model"]
-        message = self.unwrap_dist_model(self.model).load_state_dict(state_dict,strict=False)
+        message = self.unwrap_dist_model(self.model).load_state_dict(state_dict, strict=False)
 
         self.optimizer.load_state_dict(checkpoint["optimizer"])
         if self.scaler and "scaler" in checkpoint:
