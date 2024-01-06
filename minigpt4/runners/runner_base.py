@@ -92,6 +92,8 @@ class RunnerBase:
         """
         # move model to device
         if self.dist_backend == "deepspeed":
+            print('PARSED CONFIG')
+            print(self.ds_config)
             dscongiguration = {
                 "train_batch_size": 16,
                 "steps_per_print": 2000,
@@ -121,7 +123,7 @@ class RunnerBase:
                     "enabled":  "bf16"
                 },
                 "fp16": {
-                    "enabled": "fp16",
+                    "enabled": False,
                     "fp16_master_weights_and_grads": False,
                     "loss_scale": 0,
                     "loss_scale_window": 500,
@@ -141,7 +143,8 @@ class RunnerBase:
                     "cpu_offload": False
                 }
             }
-
+            print('HARD-CODED CONFIG')
+            print(dscongiguration)
             self._wrapped_model, self._optimizer, __, __ = deepspeed.initialize(
                 model=self._model, config=dscongiguration)
         else:
