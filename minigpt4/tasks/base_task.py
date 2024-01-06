@@ -15,6 +15,7 @@ from minigpt4.common.logger import MetricLogger, SmoothedValue
 from minigpt4.common.registry import registry
 from minigpt4.datasets.data_utils import prepare_sample
 import wandb
+import time
 
 class BaseTask:
     def __init__(self, **kwargs):
@@ -113,6 +114,7 @@ class BaseTask:
         log_freq=50,
         accum_grad_iters=1,
     ):
+        ### IF DS Use the ds train inner loop function
         return self._ds_train_inner_loop(
             epoch=epoch,
             iters_per_epoch=lr_scheduler.iters_per_epoch,
@@ -140,6 +142,7 @@ class BaseTask:
         log_freq=50,
         accum_grad_iters=1,
     ):
+        ### IF USE DS use ds train inner loop
         return self._ds_train_inner_loop(
             epoch=epoch,
             start_iters=start_iters,
@@ -183,13 +186,15 @@ class BaseTask:
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=1, fmt="{value:.4f}"))
-        ## @todo: Add a metric for tokens processed per second.
+        metric_logger.add_meter("samplesPersec", SmoothedValue(window_size=1, fmt="{value:.4f}"))
+        total_step_time = 0
         # if iter-based runner, schedule lr based on inner epoch.
         logging.info(
             "Start training epoch {}, {} iters per inner epoch.".format(
                 epoch, iters_per_epoch
             )
         )
+        header_new = "Samples; data epoch: [{}]".format(epoch)
         header = "Train: data epoch: [{}]".format(epoch)
         if start_iters is None:
             # epoch-based runner
@@ -203,9 +208,11 @@ class BaseTask:
             # if using iter-based runner, we stop after iters_per_epoch iterations.
             if i >= iters_per_epoch:
                 break
-
+            # metric_logger.log_every(range(data_loader), 1, header_new)
             samples = next(data_loader)
-
+            num_of_samples = len(samples)
+            print('NUMBER OF SAMPLES')
+            print(num_of_samples)
             samples = prepare_sample(samples, cuda_enabled=cuda_enabled)
             samples.update(
                 {
@@ -216,9 +223,11 @@ class BaseTask:
             )
 
             lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
-            ## TIME
+            ##TIME
+            start_time = time.time()
             with torch.cuda.amp.autocast(enabled=use_amp):
                 loss = self.train_step(model=model, samples=samples)
+
             # after_train_step()
             if use_amp:
                 scaler.scale(loss).backward()
@@ -234,11 +243,15 @@ class BaseTask:
                     optimizer.step()
                 optimizer.zero_grad()
                 # if self.cfg.wandb_log:
-            ## TIME
+                ## TIME
+
                 if self.cfg.run_cfg.wandb_log:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
+            step_time = time.time() - start_time
+            total_step_time += step_time
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+            metric_logger.update(samplesPersec=num_of_samples/total_step_time)
 
         # after train_epoch()
         # gather the stats from all processes

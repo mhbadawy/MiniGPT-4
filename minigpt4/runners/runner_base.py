@@ -57,6 +57,8 @@ class RunnerBase:
         self.dist_backend = cfg.run_cfg.dist_backend
         if self.dist_backend == "deepspeed":
             self.ds_config = cfg.ds_cfg
+            print('ds config')
+            print(self.ds_config)
         else:
             self.ds_config = None
 
