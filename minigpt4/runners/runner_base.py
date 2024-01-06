@@ -147,7 +147,6 @@ class RunnerBase:
             print(dscongiguration)
             self._wrapped_model, self._optimizer, __, __ = deepspeed.initialize(
                 model=self._model, config=dscongiguration)
-            self.model = self._wrapped_model
         else:
             if self._model.device != self.device:
                 self._model = self._model.to(self.device)
@@ -160,7 +159,6 @@ class RunnerBase:
                         )
                 else:
                     self._wrapped_model = self._model
-
         return self._wrapped_model
 
     @property
