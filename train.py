@@ -9,8 +9,6 @@ import argparse
 import os
 import random
 
-import deepspeed
-from deepspeed.accelerator import get_accelerator
 
 import numpy as np
 import torch

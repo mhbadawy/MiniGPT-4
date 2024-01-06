@@ -12,6 +12,10 @@ import os
 import time
 from pathlib import Path
 
+
+import deepspeed
+from deepspeed.accelerator import get_accelerator
+
 import torch
 import torch.distributed as dist
 import webdataset as wds
@@ -32,9 +36,6 @@ from minigpt4.datasets.datasets.dataloader_utils import (
 )
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
-
-import deepspeed as ds
-
 
 @registry.register_runner("runner_base")
 class RunnerBase:
@@ -591,7 +592,7 @@ class RunnerBase:
             self.output_dir,
             "checkpoint_{}.pth".format("best" if is_best else cur_epoch),
         )
-        if isinstance(self.model, ds.DeepSpeedEngine):
+        if isinstance(self.model, deepspeed.DeepSpeedEngine):
             self.model.save_checkpoint(save_dir=save_to, tag=cur_epoch, exclude_frozen_parameters=True)
         else:
             model_no_ddp = self.unwrap_dist_model(self.model)
