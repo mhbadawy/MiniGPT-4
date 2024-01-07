@@ -145,8 +145,27 @@ class RunnerBase:
             }
             print('HARD-CODED CONFIG')
             print(dscongiguration)
+
+            num_parameters = 0
+            p_wd, p_non_wd = [], []
+            for n, p in _model.named_parameters():
+                if not p.requires_grad:
+                    continue  # frozen weights
+                print(n)
+                if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
+                    p_non_wd.append(p)
+                else:
+                    p_wd.append(p)
+                num_parameters += p.data.nelement()
+            optim_params = [
+                {
+                    "params": p_wd,
+                    "weight_decay": float(cfg.run_cfg.weight_decay),
+                },
+                {"params": p_non_wd, "weight_decay": 0},
+            ]
             self._wrapped_model, self._optimizer, __, __ = deepspeed.initialize(
-                model=self._model, config=dscongiguration)
+                model=self._model, model_parameters=optim_params, config=dscongiguration)
         else:
             if self._model.device != self.device:
                 self._model = self._model.to(self.device)
