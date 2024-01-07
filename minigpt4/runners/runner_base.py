@@ -12,7 +12,6 @@ import os
 import time
 from pathlib import Path
 
-
 import deepspeed
 from deepspeed.accelerator import get_accelerator
 
@@ -36,6 +35,7 @@ from minigpt4.datasets.datasets.dataloader_utils import (
 )
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
+
 
 @registry.register_runner("runner_base")
 class RunnerBase:
@@ -120,7 +120,7 @@ class RunnerBase:
                 "gradient_clipping": 1.0,
                 "prescale_gradients": False,
                 "bf16": {
-                    "enabled":  "bf16"
+                    "enabled": False
                 },
                 "fp16": {
                     "enabled": False,
@@ -132,16 +132,16 @@ class RunnerBase:
                     "initial_scale_power": 15
                 },
                 "wall_clock_breakdown": False,
-                "zero_optimization": {
-                    "stage": 0,
-                    "allgather_partitions": True,
-                    "reduce_scatter": True,
-                    "allgather_bucket_size": 50000000,
-                    "reduce_bucket_size": 50000000,
-                    "overlap_comm": True,
-                    "contiguous_gradients": True,
-                    "cpu_offload": False
-                }
+                # "zero_optimization": {
+                #     "stage": args.stage,
+                #     "allgather_partitions": True,
+                #     "reduce_scatter": True,
+                #     "allgather_bucket_size": 50000000,
+                #     "reduce_bucket_size": 50000000,
+                #     "overlap_comm": True,
+                #     "contiguous_gradients": True,
+                #     "cpu_offload": False
+                # }
             }
             print('HARD-CODED CONFIG')
             print(dscongiguration)
