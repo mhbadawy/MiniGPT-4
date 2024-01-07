@@ -148,7 +148,7 @@ class RunnerBase:
 
             num_parameters = 0
             p_wd, p_non_wd = [], []
-            for n, p in _model.named_parameters():
+            for n, p in self._model.named_parameters():
                 if not p.requires_grad:
                     continue  # frozen weights
                 print(n)
