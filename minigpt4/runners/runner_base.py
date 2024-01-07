@@ -160,7 +160,7 @@ class RunnerBase:
             optim_params = [
                 {
                     "params": p_wd,
-                    "weight_decay": float(cfg.run_cfg.weight_decay),
+                    "weight_decay": float(self.config.run_cfg.weight_decay),
                 },
                 {"params": p_non_wd, "weight_decay": 0},
             ]
