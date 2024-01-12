@@ -61,8 +61,8 @@ class RunnerBase:
             # self.ds_config = DeepSpeedConfig(config_file_path)
             # print('ds config')
             # print(self.ds_config)
-        else:
-            self.ds_config = None
+        # else:
+            # self.ds_config = None
 
         self._wrapped_model = None
         self._device = None
@@ -95,7 +95,7 @@ class RunnerBase:
         # move model to device
         if self.dist_backend == "deepspeed":
             print('PARSED CONFIG')
-            print(self.ds_config)
+            # print(self.ds_config)
             dscongiguration = {
                 "train_batch_size": 16,
                 "steps_per_print": 2000,
