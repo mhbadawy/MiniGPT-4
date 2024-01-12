@@ -57,8 +57,8 @@ class RunnerBase:
         self._model = model
         self.dist_backend = cfg.run_cfg.dist_backend
         if self.dist_backend == "deepspeed":
-            config_file_path = cfg.run_cfg.ds_config_path
-            self.ds_config = DeepSpeedConfig(config_file_path)
+            self.ds_config_file_path = cfg.run_cfg.ds_config_path
+            # self.ds_config = DeepSpeedConfig(config_file_path)
             # print('ds config')
             # print(self.ds_config)
         else:
@@ -167,7 +167,7 @@ class RunnerBase:
                 {"params": p_non_wd, "weight_decay": 0},
             ]
             self._wrapped_model, self._optimizer, __, __ = deepspeed.initialize(
-                model=self._model, model_parameters=optim_params, config=self.ds_config)
+                model=self._model, model_parameters=optim_params, config=self.ds_config_file_path)
         else:
             if self._model.device != self.device:
                 self._model = self._model.to(self.device)
