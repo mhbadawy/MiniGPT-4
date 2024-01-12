@@ -14,6 +14,7 @@ from pathlib import Path
 
 import deepspeed
 from deepspeed.accelerator import get_accelerator
+from deepspeed import DeepSpeedConfig
 
 import torch
 import torch.distributed as dist
@@ -56,7 +57,8 @@ class RunnerBase:
         self._model = model
         self.dist_backend = cfg.run_cfg.dist_backend
         if self.dist_backend == "deepspeed":
-            self.ds_config = cfg.ds_cfg
+            config_file_path = cfg.run_cfg.ds_config_path
+            self.ds_config = DeepSpeedConfig(config_file_path)
             # print('ds config')
             # print(self.ds_config)
         else:
