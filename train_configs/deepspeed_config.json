@@ -4,9 +4,9 @@
     "optimizer": {
         "type": "Adam",
         "params": {
-            "learning_rate": 0.001,
+            "lr": 0.001,
             "betas": [0.8, 0.999],
-            "epsilon": 1e-08,
+            "eps": 1e-08,
             "weight_decay": 3e-07
         }
     },
