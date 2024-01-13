@@ -123,7 +123,7 @@ def init_processes(args):
     if args.dist_backend == 'deepspeed':
         init_deepspeed_comm(args.backend)
     elif args.dist_backend == 'torch':
-        init_torch_distributed(args.backend)
+        init_torch_distributed(args)
     else:
         print(f"distributed framework {args.dist_backend} not supported")
         exit(0)
