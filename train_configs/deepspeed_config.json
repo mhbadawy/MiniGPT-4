@@ -11,7 +11,7 @@
         }
     },
     "scheduler": {
-        "type": "CosineLR",
+        "type": "WarmupLR",
         "params": {
             "warmup_min_lr": 8e-5,
             "warmup_max_lr": 0.001,

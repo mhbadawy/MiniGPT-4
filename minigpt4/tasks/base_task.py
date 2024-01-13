@@ -17,6 +17,8 @@ from minigpt4.datasets.data_utils import prepare_sample
 import wandb
 import time
 
+global_step = 0
+
 class BaseTask:
     def __init__(self, **kwargs):
         super().__init__()
@@ -113,7 +115,9 @@ class BaseTask:
         cuda_enabled=False,
         log_freq=50,
         accum_grad_iters=1,
+        batch_size=1
     ):
+        global global_step
         ### IF DS Use the ds train inner loop function
         if self.dist_backend == "deepspeed":
             return self._ds_train_inner_loop(
@@ -127,6 +131,7 @@ class BaseTask:
                 log_freq=log_freq,
                 cuda_enabled=cuda_enabled,
                 accum_grad_iters=accum_grad_iters,
+                batch_size=batch_size
             )
         else:
             return self._train_inner_loop(
@@ -140,6 +145,7 @@ class BaseTask:
                 log_freq=log_freq,
                 cuda_enabled=cuda_enabled,
                 accum_grad_iters=accum_grad_iters,
+                batch_size=batch_size
             )
 
 
@@ -156,7 +162,9 @@ class BaseTask:
         cuda_enabled=False,
         log_freq=50,
         accum_grad_iters=1,
+        batch_size=1
     ):
+        global global_step
         ### IF USE DS use ds train inner loop
         if self.dist_backend == "deepspeed":
             return self._ds_train_inner_loop(
@@ -170,6 +178,7 @@ class BaseTask:
                 log_freq=log_freq,
                 cuda_enabled=cuda_enabled,
                 accum_grad_iters=accum_grad_iters,
+                batch_size=batch_size
             )
         else:
             return self._train_inner_loop(
@@ -183,6 +192,7 @@ class BaseTask:
                 log_freq=log_freq,
                 cuda_enabled=cuda_enabled,
                 accum_grad_iters=accum_grad_iters,
+                batch_size=batch_size
             )
 
     def _train_inner_loop(
@@ -198,6 +208,7 @@ class BaseTask:
         log_freq=50,
         cuda_enabled=False,
         accum_grad_iters=1,
+        batch_size=1
     ):
         """
         An inner training loop compatible with both epoch-based and iter-based training.
@@ -249,6 +260,7 @@ class BaseTask:
                     "iters": i,
                 }
             )
+            global_step += 1
 
             lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
             ##TIME
@@ -277,6 +289,13 @@ class BaseTask:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
             step_time = time.time() - start_time
             total_step_time += step_time
+            if global_step % iters_per_epoch == 0 and global_step != 0 and get_rank() == 0:
+                one_step_bs = batch_size * accum_grad_iters * get_world_size() * iters_per_epoch
+                print(' At step {}, the throughput is {:2f} Samples/s'.format(
+                    global_step * accum_grad_iters,
+                    one_step_bs / all_step_time),
+                    flush=True)
+                all_step_time = 0.0
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
             metric_logger.update(samplesPersec=num_of_samples/total_step_time)
@@ -302,6 +321,7 @@ class BaseTask:
         log_freq=50,
         cuda_enabled=False,
         accum_grad_iters=1,
+        batch_size=1
     ):
         """
         An inner training loop compatible with both epoch-based and iter-based training.
@@ -338,6 +358,7 @@ class BaseTask:
             # if using iter-based runner, we stop after iters_per_epoch iterations.
             if i >= iters_per_epoch:
                 break
+            global_step += 1
 
             samples = next(data_loader)
 
@@ -351,7 +372,7 @@ class BaseTask:
             )
 
             lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
-
+            start_time = time.time()
             with torch.cuda.amp.autocast(enabled=use_amp):
                 loss = self.train_step(model=model, samples=samples)
 
@@ -371,6 +392,15 @@ class BaseTask:
                 # if self.cfg.wandb_log:
                 if self.cfg.run_cfg.wandb_log:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
+            step_time = time.time() - start_time
+            total_step_time += step_time
+            if global_step % iters_per_epoch == 0 and global_step != 0 and get_rank() == 0:
+                one_step_bs = batch_size * accum_grad_iters * get_world_size() * iters_per_epoch
+                print(' At step {}, the throughput is {:2f} Samples/s'.format(
+                    global_step * args.gradient_accumulation_steps,
+                    one_step_bs / all_step_time),
+                    flush=True)
+                all_step_time = 0.0
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 

@@ -53,12 +53,11 @@ class RunnerBase:
 
         self.task = task
         self.datasets = datasets
-
+        self.batch_sizes = None
         self._model = model
         self.dist_backend = cfg.run_cfg.dist_backend
         if self.dist_backend == "deepspeed":
             self.ds_config_file_path = cfg.run_cfg.ds_config_path
-
 
         self._wrapped_model = None
         self._device = None
@@ -280,7 +279,7 @@ class RunnerBase:
             datasets = [self.datasets[split] for split in split_names]
             batch_sizes = [batch_sizes[split] for split in split_names]
             is_trains = [split in self.train_splits for split in split_names]
-
+            self.batch_sizes = batch_sizes
             print("batch sizes", batch_sizes)
 
             collate_fns = []
@@ -462,7 +461,9 @@ class RunnerBase:
     def train_epoch(self, epoch):
         # train
         self.model.train()
-
+        batch_size = 1
+        for s in self.batch_sizes:
+            batch_size *= s
         return self.task.train_epoch(
             epoch=epoch,
             model=self.model,
@@ -473,6 +474,7 @@ class RunnerBase:
             cuda_enabled=self.cuda_enabled,
             log_freq=self.log_freq,
             accum_grad_iters=self.accum_grad_iters,
+            batch_size=batch_size
         )
 
     @torch.no_grad()
