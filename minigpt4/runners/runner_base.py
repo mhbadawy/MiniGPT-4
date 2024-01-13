@@ -53,7 +53,7 @@ class RunnerBase:
 
         self.task = task
         self.datasets = datasets
-        self.batch_sizes = None
+        self.batch_sizes = []
         self._model = model
         self.dist_backend = cfg.run_cfg.dist_backend
         if self.dist_backend == "deepspeed":
@@ -461,9 +461,9 @@ class RunnerBase:
     def train_epoch(self, epoch):
         # train
         self.model.train()
-        batch_size = 1
-        for s in self.batch_sizes:
-            batch_size *= s
+        # batch_size = 1
+        # for s in self.batch_sizes:
+        #     batch_size *= s
         return self.task.train_epoch(
             epoch=epoch,
             model=self.model,
@@ -473,9 +473,7 @@ class RunnerBase:
             lr_scheduler=self.lr_scheduler,
             cuda_enabled=self.cuda_enabled,
             log_freq=self.log_freq,
-            accum_grad_iters=self.accum_grad_iters,
-            batch_size=batch_size
-        )
+            accum_grad_iters=self.accum_grad_iters)
 
     @torch.no_grad()
     def eval_epoch(self, split_name, cur_epoch, skip_reload=False):

@@ -115,7 +115,7 @@ class BaseTask:
         cuda_enabled=False,
         log_freq=50,
         accum_grad_iters=1,
-        batch_size=1
+        batch_size=128
     ):
         global global_step
         ### IF DS Use the ds train inner loop function
@@ -162,7 +162,7 @@ class BaseTask:
         cuda_enabled=False,
         log_freq=50,
         accum_grad_iters=1,
-        batch_size=1
+        batch_size=128
     ):
         global global_step
         ### IF USE DS use ds train inner loop
@@ -208,7 +208,7 @@ class BaseTask:
         log_freq=50,
         cuda_enabled=False,
         accum_grad_iters=1,
-        batch_size=1
+        batch_size=128
     ):
         """
         An inner training loop compatible with both epoch-based and iter-based training.
@@ -225,7 +225,6 @@ class BaseTask:
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=1, fmt="{value:.4f}"))
-        metric_logger.add_meter("samplesPersec", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         total_step_time = 0
         # if iter-based runner, schedule lr based on inner epoch.
         logging.info(
@@ -249,9 +248,6 @@ class BaseTask:
                 break
             # metric_logger.log_every(range(data_loader), 1, header_new)
             samples = next(data_loader)
-            num_of_samples = len(samples)
-            print('NUMBER OF SAMPLES')
-            print(num_of_samples)
             samples = prepare_sample(samples, cuda_enabled=cuda_enabled)
             samples.update(
                 {
@@ -298,7 +294,6 @@ class BaseTask:
                 all_step_time = 0.0
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
-            metric_logger.update(samplesPersec=num_of_samples/total_step_time)
 
         # after train_epoch()
         # gather the stats from all processes
@@ -397,7 +392,7 @@ class BaseTask:
             if global_step % iters_per_epoch == 0 and global_step != 0 and get_rank() == 0:
                 one_step_bs = batch_size * accum_grad_iters * get_world_size() * iters_per_epoch
                 print(' At step {}, the throughput is {:2f} Samples/s'.format(
-                    global_step * args.gradient_accumulation_steps,
+                    global_step * accum_grad_iters,
                     one_step_bs / all_step_time),
                     flush=True)
                 all_step_time = 0.0
