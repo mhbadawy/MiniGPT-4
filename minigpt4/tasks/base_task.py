@@ -333,6 +333,7 @@ class BaseTask:
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=1, fmt="{value:.4f}"))
+        total_step_time = 0
 
         # if iter-based runner, schedule lr based on inner epoch.
         logging.info(
