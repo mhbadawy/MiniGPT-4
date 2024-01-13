@@ -100,7 +100,6 @@ def init_torch_distributed(args):
         ),  # allow auto-downloading and de-compressing
     )
     torch.distributed.barrier()
-    get_accelerator().set_device(local_rank)
     setup_for_distributed(args.rank == 0)
 
 
