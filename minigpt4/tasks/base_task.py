@@ -16,7 +16,7 @@ from minigpt4.common.registry import registry
 from minigpt4.datasets.data_utils import prepare_sample
 import wandb
 import time
-
+global global_step
 global_step = 0
 
 class BaseTask:
@@ -117,7 +117,6 @@ class BaseTask:
         accum_grad_iters=1,
         batch_size=128
     ):
-        global global_step
         ### IF DS Use the ds train inner loop function
         if self.dist_backend == "deepspeed":
             return self._ds_train_inner_loop(
@@ -164,7 +163,6 @@ class BaseTask:
         accum_grad_iters=1,
         batch_size=128
     ):
-        global global_step
         ### IF USE DS use ds train inner loop
         if self.dist_backend == "deepspeed":
             return self._ds_train_inner_loop(
@@ -216,6 +214,7 @@ class BaseTask:
         When using epoch-based, training stops after one epoch; when using iter-based,
         training stops after #iters_per_epoch iterations.
         """
+
         use_amp = scaler is not None
 
         if not hasattr(data_loader, "__next__"):
