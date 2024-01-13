@@ -288,9 +288,9 @@ class BaseTask:
                 one_step_bs = batch_size * accum_grad_iters * get_world_size() * iters_per_epoch
                 print(' At step {}, the throughput is {:2f} Samples/s'.format(
                     global_step * accum_grad_iters,
-                    one_step_bs / all_step_time),
+                    one_step_bs / total_step_time),
                     flush=True)
-                all_step_time = 0.0
+                total_step_time = 0.0
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
@@ -394,9 +394,9 @@ class BaseTask:
                 one_step_bs = batch_size * accum_grad_iters * get_world_size() * iters_per_epoch
                 print(' At step {}, the throughput is {:2f} Samples/s'.format(
                     global_step * accum_grad_iters,
-                    one_step_bs / all_step_time),
+                    one_step_bs / total_step_time),
                     flush=True)
-                all_step_time = 0.0
+                total_step_time = 0.0
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
