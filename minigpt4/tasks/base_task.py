@@ -16,7 +16,6 @@ from minigpt4.common.registry import registry
 from minigpt4.datasets.data_utils import prepare_sample
 import wandb
 import time
-global global_step
 global_step = 0
 
 class BaseTask:
@@ -105,17 +104,17 @@ class BaseTask:
         return results
 
     def train_epoch(
-        self,
-        epoch,
-        model,
-        data_loader,
-        optimizer,
-        lr_scheduler,
-        scaler=None,
-        cuda_enabled=False,
-        log_freq=50,
-        accum_grad_iters=1,
-        batch_size=128
+            self,
+            epoch,
+            model,
+            data_loader,
+            optimizer,
+            lr_scheduler,
+            scaler=None,
+            cuda_enabled=False,
+            log_freq=50,
+            accum_grad_iters=1,
+            batch_size=128
     ):
         ### IF DS Use the ds train inner loop function
         if self.dist_backend == "deepspeed":
@@ -149,19 +148,19 @@ class BaseTask:
 
 
     def train_iters(
-        self,
-        epoch,
-        start_iters,
-        iters_per_inner_epoch,
-        model,
-        data_loader,
-        optimizer,
-        lr_scheduler,
-        scaler=None,
-        cuda_enabled=False,
-        log_freq=50,
-        accum_grad_iters=1,
-        batch_size=128
+            self,
+            epoch,
+            start_iters,
+            iters_per_inner_epoch,
+            model,
+            data_loader,
+            optimizer,
+            lr_scheduler,
+            scaler=None,
+            cuda_enabled=False,
+            log_freq=50,
+            accum_grad_iters=1,
+            batch_size=128
     ):
         ### IF USE DS use ds train inner loop
         if self.dist_backend == "deepspeed":
@@ -194,19 +193,19 @@ class BaseTask:
             )
 
     def _train_inner_loop(
-        self,
-        epoch,
-        iters_per_epoch,
-        model,
-        data_loader,
-        optimizer,
-        lr_scheduler,
-        scaler=None,
-        start_iters=None,
-        log_freq=50,
-        cuda_enabled=False,
-        accum_grad_iters=1,
-        batch_size=128
+            self,
+            epoch,
+            iters_per_epoch,
+            model,
+            data_loader,
+            optimizer,
+            lr_scheduler,
+            scaler=None,
+            start_iters=None,
+            log_freq=50,
+            cuda_enabled=False,
+            accum_grad_iters=1,
+            batch_size=128
     ):
         """
         An inner training loop compatible with both epoch-based and iter-based training.
@@ -216,6 +215,7 @@ class BaseTask:
         """
 
         use_amp = scaler is not None
+        global global_step
 
         if not hasattr(data_loader, "__next__"):
             # convert to iterator if not already
@@ -303,19 +303,19 @@ class BaseTask:
             for k, meter in metric_logger.meters.items()
         }
     def _ds_train_inner_loop(
-        self,
-        epoch,
-        iters_per_epoch,
-        model,
-        data_loader,
-        optimizer,
-        lr_scheduler,
-        scaler=None,
-        start_iters=None,
-        log_freq=50,
-        cuda_enabled=False,
-        accum_grad_iters=1,
-        batch_size=1
+            self,
+            epoch,
+            iters_per_epoch,
+            model,
+            data_loader,
+            optimizer,
+            lr_scheduler,
+            scaler=None,
+            start_iters=None,
+            log_freq=50,
+            cuda_enabled=False,
+            accum_grad_iters=1,
+            batch_size=1
     ):
         """
         An inner training loop compatible with both epoch-based and iter-based training.
@@ -324,6 +324,7 @@ class BaseTask:
         training stops after #iters_per_epoch iterations.
         """
         use_amp = scaler is not None
+        global global_step
 
         if not hasattr(data_loader, "__next__"):
             # convert to iterator if not already
