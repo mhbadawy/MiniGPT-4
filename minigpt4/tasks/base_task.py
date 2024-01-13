@@ -23,7 +23,7 @@ class BaseTask:
 
         self.inst_id_key = "instance_id"
         self.cfg = ""
-
+        self.dist_backend = ""
     @classmethod
     def setup_task(cls, **kwargs):
         return cls()
@@ -31,7 +31,7 @@ class BaseTask:
     def build_model(self, cfg):
         self.cfg = cfg
         model_config = cfg.model_cfg
-
+        self.dist_backend = cfg.run_cfg.dist_backend
         model_cls = registry.get_model_class(model_config.arch)
         return model_cls.from_config(model_config)
 
@@ -115,18 +115,33 @@ class BaseTask:
         accum_grad_iters=1,
     ):
         ### IF DS Use the ds train inner loop function
-        return self._ds_train_inner_loop(
-            epoch=epoch,
-            iters_per_epoch=lr_scheduler.iters_per_epoch,
-            model=model,
-            data_loader=data_loader,
-            optimizer=optimizer,
-            scaler=scaler,
-            lr_scheduler=lr_scheduler,
-            log_freq=log_freq,
-            cuda_enabled=cuda_enabled,
-            accum_grad_iters=accum_grad_iters,
-        )
+        if self.dist_backend == "deepspeed":
+            return self._ds_train_inner_loop(
+                epoch=epoch,
+                iters_per_epoch=lr_scheduler.iters_per_epoch,
+                model=model,
+                data_loader=data_loader,
+                optimizer=optimizer,
+                scaler=scaler,
+                lr_scheduler=lr_scheduler,
+                log_freq=log_freq,
+                cuda_enabled=cuda_enabled,
+                accum_grad_iters=accum_grad_iters,
+            )
+        else:
+            return self._train_inner_loop(
+                epoch=epoch,
+                iters_per_epoch=lr_scheduler.iters_per_epoch,
+                model=model,
+                data_loader=data_loader,
+                optimizer=optimizer,
+                scaler=scaler,
+                lr_scheduler=lr_scheduler,
+                log_freq=log_freq,
+                cuda_enabled=cuda_enabled,
+                accum_grad_iters=accum_grad_iters,
+            )
+
 
     def train_iters(
         self,
@@ -143,19 +158,32 @@ class BaseTask:
         accum_grad_iters=1,
     ):
         ### IF USE DS use ds train inner loop
-        return self._ds_train_inner_loop(
-            epoch=epoch,
-            start_iters=start_iters,
-            iters_per_epoch=iters_per_inner_epoch,
-            model=model,
-            data_loader=data_loader,
-            optimizer=optimizer,
-            scaler=scaler,
-            lr_scheduler=lr_scheduler,
-            log_freq=log_freq,
-            cuda_enabled=cuda_enabled,
-            accum_grad_iters=accum_grad_iters,
-        )
+        if self.dist_backend == "deepspeed":
+            return self._ds_train_inner_loop(
+                epoch=epoch,
+                iters_per_epoch=lr_scheduler.iters_per_epoch,
+                model=model,
+                data_loader=data_loader,
+                optimizer=optimizer,
+                scaler=scaler,
+                lr_scheduler=lr_scheduler,
+                log_freq=log_freq,
+                cuda_enabled=cuda_enabled,
+                accum_grad_iters=accum_grad_iters,
+            )
+        else:
+            return self._train_inner_loop(
+                epoch=epoch,
+                iters_per_epoch=lr_scheduler.iters_per_epoch,
+                model=model,
+                data_loader=data_loader,
+                optimizer=optimizer,
+                scaler=scaler,
+                lr_scheduler=lr_scheduler,
+                log_freq=log_freq,
+                cuda_enabled=cuda_enabled,
+                accum_grad_iters=accum_grad_iters,
+            )
 
     def _train_inner_loop(
         self,

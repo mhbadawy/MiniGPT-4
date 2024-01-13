@@ -58,11 +58,7 @@ class RunnerBase:
         self.dist_backend = cfg.run_cfg.dist_backend
         if self.dist_backend == "deepspeed":
             self.ds_config_file_path = cfg.run_cfg.ds_config_path
-            # self.ds_config = DeepSpeedConfig(config_file_path)
-            # print('ds config')
-            # print(self.ds_config)
-        # else:
-            # self.ds_config = None
+
 
         self._wrapped_model = None
         self._device = None
@@ -94,60 +90,6 @@ class RunnerBase:
         """
         # move model to device
         if self.dist_backend == "deepspeed":
-            print('PARSED CONFIG')
-            # print(self.ds_config)
-            dscongiguration = {
-                "train_batch_size": 16,
-                "steps_per_print": 2000,
-                "optimizer": {
-                    "type": "Adam",
-                    "params": {
-                        "lr": 0.001,
-                        "betas": [
-                            0.8,
-                            0.999
-                        ],
-                        "eps": 1e-8,
-                        "weight_decay": 3e-7
-                    }
-                },
-                "scheduler": {
-                    "type": "WarmupLR",
-                    "params": {
-                        "warmup_min_lr": 0,
-                        "warmup_max_lr": 0.001,
-                        "warmup_num_steps": 1000
-                    }
-                },
-                "gradient_clipping": 1.0,
-                "prescale_gradients": False,
-                "bf16": {
-                    "enabled": False
-                },
-                "fp16": {
-                    "enabled": False,
-                    "fp16_master_weights_and_grads": False,
-                    "loss_scale": 0,
-                    "loss_scale_window": 500,
-                    "hysteresis": 2,
-                    "min_loss_scale": 1,
-                    "initial_scale_power": 15
-                },
-                "wall_clock_breakdown": False,
-                # "zero_optimization": {
-                #     "stage": args.stage,
-                #     "allgather_partitions": True,
-                #     "reduce_scatter": True,
-                #     "allgather_bucket_size": 50000000,
-                #     "reduce_bucket_size": 50000000,
-                #     "overlap_comm": True,
-                #     "contiguous_gradients": True,
-                #     "cpu_offload": False
-                # }
-            }
-            print('HARD-CODED CONFIG')
-            print(dscongiguration)
-
             num_parameters = 0
             p_wd, p_non_wd = [], []
             for n, p in self._model.named_parameters():
