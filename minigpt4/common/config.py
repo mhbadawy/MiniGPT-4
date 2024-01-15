@@ -84,14 +84,7 @@ class Config:
 
     @staticmethod
     def build_runner_config(config):
-
-        run_config = {"run": config.run}
-        if config.run.dist_backend == "deepspeed":
-            ds_config_path = config.run.ds_config_path
-            ds_config = OmegaConf.load(ds_config_path)
-            run_config = {"run": config.run, "ds_config": ds_config}
-
-        return run_config
+        return {"run": config.run}
 
     @staticmethod
     def build_dataset_config(config):
@@ -162,10 +155,6 @@ class Config:
     @property
     def run_cfg(self):
         return self.config.run
-
-    @property
-    def ds_cfg(self):
-        return self.config.ds_config
 
     @property
     def datasets_cfg(self):
