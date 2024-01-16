@@ -16,7 +16,9 @@ from minigpt4.common.registry import registry
 from minigpt4.datasets.data_utils import prepare_sample
 import wandb
 import time
+
 global_step = 0
+
 
 class BaseTask:
     def __init__(self, **kwargs):
@@ -25,6 +27,7 @@ class BaseTask:
         self.inst_id_key = "instance_id"
         self.cfg = ""
         self.dist_backend = ""
+
     @classmethod
     def setup_task(cls, **kwargs):
         return cls()
@@ -114,9 +117,9 @@ class BaseTask:
             cuda_enabled=False,
             log_freq=50,
             accum_grad_iters=1,
-            batch_size=128
+            batch_size=1
     ):
-        ### IF DS Use the ds train inner loop function
+        print('batch size[parsed]: %d' % batch_size)
         if self.dist_backend == "deepspeed":
             return self._ds_train_inner_loop(
                 epoch=epoch,
@@ -145,7 +148,6 @@ class BaseTask:
                 accum_grad_iters=accum_grad_iters,
                 batch_size=batch_size
             )
-
 
     def train_iters(
             self,
@@ -302,6 +304,7 @@ class BaseTask:
             k: "{:.3f}".format(meter.global_avg)
             for k, meter in metric_logger.meters.items()
         }
+
     def _ds_train_inner_loop(
             self,
             epoch,

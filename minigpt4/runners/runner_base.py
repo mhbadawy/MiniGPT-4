@@ -461,9 +461,13 @@ class RunnerBase:
     def train_epoch(self, epoch):
         # train
         self.model.train()
-        # batch_size = 1
-        # for s in self.batch_sizes:
-        #     batch_size *= s
+        batch_size = 1
+        if self.batch_sizes is None:
+            self.train_loader()
+        for s in self.batch_sizes:
+            for x in s:
+                batch_size *= x
+
         return self.task.train_epoch(
             epoch=epoch,
             model=self.model,
@@ -473,7 +477,8 @@ class RunnerBase:
             lr_scheduler=self.lr_scheduler,
             cuda_enabled=self.cuda_enabled,
             log_freq=self.log_freq,
-            accum_grad_iters=self.accum_grad_iters)
+            accum_grad_iters=self.accum_grad_iters,
+            batch_size=batch_size)
 
     @torch.no_grad()
     def eval_epoch(self, split_name, cur_epoch, skip_reload=False):
