@@ -380,7 +380,7 @@ class BaseTask:
             #     model.backward(scaler.scale(loss))
             # else:
             #     model.backward(loss)
-            model.network.backward(loss)
+            model.backward(loss)
 
             # update gradients every accum_grad_iters iterations
             if (i + 1) % accum_grad_iters == 0:
@@ -389,7 +389,7 @@ class BaseTask:
                 #     scaler.update()
                 # else:
                 #     model.step()
-                model.network.step()
+                model.step()
                 # if self.cfg.wandb_log:
                 if self.cfg.run_cfg.wandb_log:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
