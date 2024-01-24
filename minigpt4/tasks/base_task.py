@@ -370,24 +370,26 @@ class BaseTask:
                 }
             )
 
-            lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
+            # lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
             start_time = time.time()
-            with torch.cuda.amp.autocast(enabled=use_amp):
-                loss = self.train_step(model=model, samples=samples)
+            # with torch.cuda.amp.autocast(enabled=use_amp):
+            loss = self.train_step(model=model, samples=samples)
 
             # after_train_step()
-            if use_amp:
-                model.backward(scaler.scale(loss))
-            else:
-                model.backward(loss)
+            # if use_amp:
+            #     model.backward(scaler.scale(loss))
+            # else:
+            #     model.backward(loss)
+            model.network.backward(loss)
 
             # update gradients every accum_grad_iters iterations
             if (i + 1) % accum_grad_iters == 0:
-                if use_amp:
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
-                    model.step()
+                # if use_amp:
+                #     scaler.step(optimizer)
+                #     scaler.update()
+                # else:
+                #     model.step()
+                model.network.step()
                 # if self.cfg.wandb_log:
                 if self.cfg.run_cfg.wandb_log:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
