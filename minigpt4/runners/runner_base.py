@@ -12,6 +12,10 @@ import os
 import time
 from pathlib import Path
 
+import deepspeed
+from deepspeed.accelerator import get_accelerator
+from deepspeed import DeepSpeedConfig
+
 import torch
 import torch.distributed as dist
 import webdataset as wds
@@ -49,8 +53,11 @@ class RunnerBase:
 
         self.task = task
         self.datasets = datasets
-
+        self.batch_sizes = []
         self._model = model
+        self.dist_backend = cfg.run_cfg.dist_backend
+        if self.dist_backend == "deepspeed":
+            self.ds_config_file_path = cfg.run_cfg.ds_config_path
 
         self._wrapped_model = None
         self._device = None
@@ -81,18 +88,39 @@ class RunnerBase:
         A property to get the DDP-wrapped model on the device.
         """
         # move model to device
-        if self._model.device != self.device:
-            self._model = self._model.to(self.device)
+        if self.dist_backend == "deepspeed":
+            num_parameters = 0
+            p_wd, p_non_wd = [], []
+            for n, p in self._model.named_parameters():
+                if not p.requires_grad:
+                    continue  # frozen weights
+                print(n)
+                if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
+                    p_non_wd.append(p)
+                else:
+                    p_wd.append(p)
+                num_parameters += p.data.nelement()
+            optim_params = [
+                {
+                    "params": p_wd,
+                    "weight_decay": float(self.config.run_cfg.weight_decay),
+                },
+                {"params": p_non_wd, "weight_decay": 0},
+            ]
+            self._wrapped_model, self._optimizer, __, __ = deepspeed.initialize(
+                model=self._model, model_parameters=optim_params, config=self.ds_config_file_path)
+        else:
+            if self._model.device != self.device:
+                self._model = self._model.to(self.device)
 
-            # distributed training wrapper
-            if self.use_distributed:
-                if self._wrapped_model is None:
-                    self._wrapped_model = DDP(
-                        self._model, device_ids=[self.config.run_cfg.gpu], find_unused_parameters=True
-                    )
-            else:
-                self._wrapped_model = self._model
-
+                # distributed training wrapper
+                if self.use_distributed:
+                    if self._wrapped_model is None:
+                        self._wrapped_model = DDP(
+                            self._model, device_ids=[self.config.run_cfg.gpu], find_unused_parameters=True
+                        )
+                else:
+                    self._wrapped_model = self._model
         return self._wrapped_model
 
     @property
@@ -215,7 +243,7 @@ class RunnerBase:
             # print dataset statistics after concatenation/chaining
             for split_name in self.datasets:
                 if isinstance(self.datasets[split_name], tuple) or isinstance(
-                    self.datasets[split_name], list
+                        self.datasets[split_name], list
                 ):
                     # mixed wds.DataPipeline and torch.utils.data.Dataset
                     num_records = sum(
@@ -251,7 +279,7 @@ class RunnerBase:
             datasets = [self.datasets[split] for split in split_names]
             batch_sizes = [batch_sizes[split] for split in split_names]
             is_trains = [split in self.train_splits for split in split_names]
-
+            self.batch_sizes = batch_sizes
             print("batch sizes", batch_sizes)
 
             collate_fns = []
@@ -388,7 +416,7 @@ class RunnerBase:
                     if val_log is not None:
                         if is_main_process():
                             assert (
-                                "agg_metrics" in val_log
+                                    "agg_metrics" in val_log
                             ), "No agg_metrics found in validation log."
 
                             agg_metrics = val_log["agg_metrics"]
@@ -433,6 +461,12 @@ class RunnerBase:
     def train_epoch(self, epoch):
         # train
         self.model.train()
+        batch_size = 1
+        if self.batch_sizes is None:
+            self.train_loader()
+        for s in self.batch_sizes:
+            for x in s:
+                batch_size *= x
 
         return self.task.train_epoch(
             epoch=epoch,
@@ -444,7 +478,7 @@ class RunnerBase:
             cuda_enabled=self.cuda_enabled,
             log_freq=self.log_freq,
             accum_grad_iters=self.accum_grad_iters,
-        )
+            batch_size=batch_size)
 
     @torch.no_grad()
     def eval_epoch(self, split_name, cur_epoch, skip_reload=False):
@@ -488,13 +522,13 @@ class RunnerBase:
             return model
 
     def create_loaders(
-        self,
-        datasets,
-        num_workers,
-        batch_sizes,
-        is_trains,
-        collate_fns,
-        dataset_ratios=None,
+            self,
+            datasets,
+            num_workers,
+            batch_sizes,
+            is_trains,
+            collate_fns,
+            dataset_ratios=None,
     ):
         """
         Create dataloaders for training and validation.
@@ -503,7 +537,7 @@ class RunnerBase:
         def _create_loader(dataset, num_workers, bsz, is_train, collate_fn):
             # create a single dataloader for each split
             if isinstance(dataset, ChainDataset) or isinstance(
-                dataset, wds.DataPipeline
+                    dataset, wds.DataPipeline
             ):
                 # wds.WebdDataset instance are chained together
                 # webdataset.DataPipeline has its own sampler and collate_fn
@@ -552,7 +586,7 @@ class RunnerBase:
         loaders = []
 
         for dataset, bsz, is_train, collate_fn in zip(
-            datasets, batch_sizes, is_trains, collate_fns
+                datasets, batch_sizes, is_trains, collate_fns
         ):
             if isinstance(dataset, list) or isinstance(dataset, tuple):
                 if hasattr(dataset[0], 'sample_ratio') and dataset_ratios is None:
@@ -576,28 +610,31 @@ class RunnerBase:
         """
         Save the checkpoint at the current epoch.
         """
-        model_no_ddp = self.unwrap_dist_model(self.model)
-        param_grad_dic = {
-            k: v.requires_grad for (k, v) in model_no_ddp.named_parameters()
-        }
-        state_dict = model_no_ddp.state_dict()
-        for k in list(state_dict.keys()):
-            if k in param_grad_dic.keys() and not param_grad_dic[k]:
-                # delete parameters that do not require gradient
-                del state_dict[k]
-        save_obj = {
-            "model": state_dict,
-            "optimizer": self.optimizer.state_dict(),
-            "config": self.config.to_dict(),
-            "scaler": self.scaler.state_dict() if self.scaler else None,
-            "epoch": cur_epoch,
-        }
         save_to = os.path.join(
             self.output_dir,
             "checkpoint_{}.pth".format("best" if is_best else cur_epoch),
         )
+        if isinstance(self.model, deepspeed.DeepSpeedEngine):
+            self.model.save_checkpoint(save_dir=save_to, tag=cur_epoch, exclude_frozen_parameters=True)
+        else:
+            model_no_ddp = self.unwrap_dist_model(self.model)
+            param_grad_dic = {
+                k: v.requires_grad for (k, v) in model_no_ddp.named_parameters()
+            }
+            state_dict = model_no_ddp.state_dict()
+            for k in list(state_dict.keys()):
+                if k in param_grad_dic.keys() and not param_grad_dic[k]:
+                    # delete parameters that do not require gradient
+                    del state_dict[k]
+            save_obj = {
+                "model": state_dict,
+                "optimizer": self.optimizer.state_dict(),
+                "config": self.config.to_dict(),
+                "scaler": self.scaler.state_dict() if self.scaler else None,
+                "epoch": cur_epoch,
+            }
+            torch.save(save_obj, save_to)
         logging.info("Saving checkpoint at epoch {} to {}.".format(cur_epoch, save_to))
-        torch.save(save_obj, save_to)
 
     def _reload_best_model(self, model):
         """
@@ -634,7 +671,7 @@ class RunnerBase:
             raise RuntimeError("checkpoint url or path is invalid")
 
         state_dict = checkpoint["model"]
-        message = self.unwrap_dist_model(self.model).load_state_dict(state_dict,strict=False)
+        message = self.unwrap_dist_model(self.model).load_state_dict(state_dict, strict=False)
 
         self.optimizer.load_state_dict(checkpoint["optimizer"])
         if self.scaler and "scaler" in checkpoint:

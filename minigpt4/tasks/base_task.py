@@ -15,6 +15,10 @@ from minigpt4.common.logger import MetricLogger, SmoothedValue
 from minigpt4.common.registry import registry
 from minigpt4.datasets.data_utils import prepare_sample
 import wandb
+import time
+
+global_step = 0
+
 
 class BaseTask:
     def __init__(self, **kwargs):
@@ -22,6 +26,7 @@ class BaseTask:
 
         self.inst_id_key = "instance_id"
         self.cfg = ""
+        self.dist_backend = ""
 
     @classmethod
     def setup_task(cls, **kwargs):
@@ -30,7 +35,7 @@ class BaseTask:
     def build_model(self, cfg):
         self.cfg = cfg
         model_config = cfg.model_cfg
-
+        self.dist_backend = cfg.run_cfg.dist_backend
         model_cls = registry.get_model_class(model_config.arch)
         return model_cls.from_config(model_config)
 
@@ -102,71 +107,107 @@ class BaseTask:
         return results
 
     def train_epoch(
-        self,
-        epoch,
-        model,
-        data_loader,
-        optimizer,
-        lr_scheduler,
-        scaler=None,
-        cuda_enabled=False,
-        log_freq=50,
-        accum_grad_iters=1,
+            self,
+            epoch,
+            model,
+            data_loader,
+            optimizer,
+            lr_scheduler,
+            scaler=None,
+            cuda_enabled=False,
+            log_freq=50,
+            accum_grad_iters=1,
+            batch_size=1
     ):
-        return self._train_inner_loop(
-            epoch=epoch,
-            iters_per_epoch=lr_scheduler.iters_per_epoch,
-            model=model,
-            data_loader=data_loader,
-            optimizer=optimizer,
-            scaler=scaler,
-            lr_scheduler=lr_scheduler,
-            log_freq=log_freq,
-            cuda_enabled=cuda_enabled,
-            accum_grad_iters=accum_grad_iters,
-        )
+        print('batch size[parsed]: %d' % batch_size)
+        if self.dist_backend == "deepspeed":
+            return self._ds_train_inner_loop(
+                epoch=epoch,
+                iters_per_epoch=lr_scheduler.iters_per_epoch,
+                model=model,
+                data_loader=data_loader,
+                optimizer=optimizer,
+                scaler=scaler,
+                lr_scheduler=lr_scheduler,
+                log_freq=log_freq,
+                cuda_enabled=cuda_enabled,
+                accum_grad_iters=accum_grad_iters,
+                batch_size=batch_size
+            )
+        else:
+            return self._train_inner_loop(
+                epoch=epoch,
+                iters_per_epoch=lr_scheduler.iters_per_epoch,
+                model=model,
+                data_loader=data_loader,
+                optimizer=optimizer,
+                scaler=scaler,
+                lr_scheduler=lr_scheduler,
+                log_freq=log_freq,
+                cuda_enabled=cuda_enabled,
+                accum_grad_iters=accum_grad_iters,
+                batch_size=batch_size
+            )
 
     def train_iters(
-        self,
-        epoch,
-        start_iters,
-        iters_per_inner_epoch,
-        model,
-        data_loader,
-        optimizer,
-        lr_scheduler,
-        scaler=None,
-        cuda_enabled=False,
-        log_freq=50,
-        accum_grad_iters=1,
+            self,
+            epoch,
+            start_iters,
+            iters_per_inner_epoch,
+            model,
+            data_loader,
+            optimizer,
+            lr_scheduler,
+            scaler=None,
+            cuda_enabled=False,
+            log_freq=50,
+            accum_grad_iters=1,
+            batch_size=128
     ):
-        return self._train_inner_loop(
-            epoch=epoch,
-            start_iters=start_iters,
-            iters_per_epoch=iters_per_inner_epoch,
-            model=model,
-            data_loader=data_loader,
-            optimizer=optimizer,
-            scaler=scaler,
-            lr_scheduler=lr_scheduler,
-            log_freq=log_freq,
-            cuda_enabled=cuda_enabled,
-            accum_grad_iters=accum_grad_iters,
-        )
+        ### IF USE DS use ds train inner loop
+        if self.dist_backend == "deepspeed":
+            return self._ds_train_inner_loop(
+                epoch=epoch,
+                iters_per_epoch=lr_scheduler.iters_per_epoch,
+                model=model,
+                data_loader=data_loader,
+                optimizer=optimizer,
+                scaler=scaler,
+                lr_scheduler=lr_scheduler,
+                log_freq=log_freq,
+                cuda_enabled=cuda_enabled,
+                accum_grad_iters=accum_grad_iters,
+                batch_size=batch_size
+            )
+        else:
+            return self._train_inner_loop(
+                epoch=epoch,
+                iters_per_epoch=lr_scheduler.iters_per_epoch,
+                model=model,
+                data_loader=data_loader,
+                optimizer=optimizer,
+                scaler=scaler,
+                lr_scheduler=lr_scheduler,
+                log_freq=log_freq,
+                cuda_enabled=cuda_enabled,
+                accum_grad_iters=accum_grad_iters,
+                batch_size=batch_size
+            )
 
     def _train_inner_loop(
-        self,
-        epoch,
-        iters_per_epoch,
-        model,
-        data_loader,
-        optimizer,
-        lr_scheduler,
-        scaler=None,
-        start_iters=None,
-        log_freq=50,
-        cuda_enabled=False,
-        accum_grad_iters=1,
+            self,
+            epoch,
+            iters_per_epoch,
+            model,
+            data_loader,
+            optimizer,
+            lr_scheduler,
+            scaler=None,
+            start_iters=None,
+            log_freq=50,
+            cuda_enabled=False,
+            accum_grad_iters=1,
+            batch_size=128
     ):
         """
         An inner training loop compatible with both epoch-based and iter-based training.
@@ -174,7 +215,9 @@ class BaseTask:
         When using epoch-based, training stops after one epoch; when using iter-based,
         training stops after #iters_per_epoch iterations.
         """
+
         use_amp = scaler is not None
+        global global_step
 
         if not hasattr(data_loader, "__next__"):
             # convert to iterator if not already
@@ -183,6 +226,117 @@ class BaseTask:
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=1, fmt="{value:.4f}"))
+        total_step_time = 0
+        # if iter-based runner, schedule lr based on inner epoch.
+        logging.info(
+            "Start training epoch {}, {} iters per inner epoch.".format(
+                epoch, iters_per_epoch
+            )
+        )
+        header_new = "Samples; data epoch: [{}]".format(epoch)
+        header = "Train: data epoch: [{}]".format(epoch)
+        if start_iters is None:
+            # epoch-based runner
+            inner_epoch = epoch
+        else:
+            # In iter-based runner, we schedule the learning rate based on iterations.
+            inner_epoch = start_iters // iters_per_epoch
+            header = header + "; inner epoch [{}]".format(inner_epoch)
+
+        for i in metric_logger.log_every(range(iters_per_epoch), log_freq, header):
+            # if using iter-based runner, we stop after iters_per_epoch iterations.
+            if i >= iters_per_epoch:
+                break
+            # metric_logger.log_every(range(data_loader), 1, header_new)
+            samples = next(data_loader)
+            samples = prepare_sample(samples, cuda_enabled=cuda_enabled)
+            samples.update(
+                {
+                    "epoch": inner_epoch,
+                    "num_iters_per_epoch": iters_per_epoch,
+                    "iters": i,
+                }
+            )
+            global_step += 1
+
+            lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
+            ##TIME
+            start_time = time.time()
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                loss = self.train_step(model=model, samples=samples)
+
+            # after_train_step()
+            if use_amp:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()
+
+            # update gradients every accum_grad_iters iterations
+            if (i + 1) % accum_grad_iters == 0:
+                if use_amp:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
+                optimizer.zero_grad()
+                # if self.cfg.wandb_log:
+                ## TIME
+
+                if self.cfg.run_cfg.wandb_log:
+                    wandb.log({"epoch": inner_epoch, "loss": loss})
+            step_time = time.time() - start_time
+            total_step_time += step_time
+            if global_step % iters_per_epoch == 0 and global_step != 0 and get_rank() == 0:
+                one_step_bs = batch_size * accum_grad_iters * get_world_size() * iters_per_epoch
+                print(' At step {}, the throughput is {:2f} Samples/s'.format(
+                    global_step * accum_grad_iters,
+                    one_step_bs / total_step_time),
+                    flush=True)
+                total_step_time = 0.0
+            metric_logger.update(loss=loss.item())
+            metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+
+        # after train_epoch()
+        # gather the stats from all processes
+        metric_logger.synchronize_between_processes()
+        logging.info("Averaged stats: " + str(metric_logger.global_avg()))
+        return {
+            k: "{:.3f}".format(meter.global_avg)
+            for k, meter in metric_logger.meters.items()
+        }
+
+    def _ds_train_inner_loop(
+            self,
+            epoch,
+            iters_per_epoch,
+            model,
+            data_loader,
+            optimizer,
+            lr_scheduler,
+            scaler=None,
+            start_iters=None,
+            log_freq=50,
+            cuda_enabled=False,
+            accum_grad_iters=1,
+            batch_size=1
+    ):
+        """
+        An inner training loop compatible with both epoch-based and iter-based training.
+
+        When using epoch-based, training stops after one epoch; when using iter-based,
+        training stops after #iters_per_epoch iterations.
+        """
+        use_amp = scaler is not None
+        global global_step
+
+        if not hasattr(data_loader, "__next__"):
+            # convert to iterator if not already
+            data_loader = iter(data_loader)
+
+        metric_logger = MetricLogger(delimiter="  ")
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
+        metric_logger.add_meter("loss", SmoothedValue(window_size=1, fmt="{value:.4f}"))
+        total_step_time = 0
 
         # if iter-based runner, schedule lr based on inner epoch.
         logging.info(
@@ -203,6 +357,7 @@ class BaseTask:
             # if using iter-based runner, we stop after iters_per_epoch iterations.
             if i >= iters_per_epoch:
                 break
+            global_step += 1
 
             samples = next(data_loader)
 
@@ -215,28 +370,38 @@ class BaseTask:
                 }
             )
 
-            lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
-
-            with torch.cuda.amp.autocast(enabled=use_amp):
-                loss = self.train_step(model=model, samples=samples)
+            # lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
+            start_time = time.time()
+            # with torch.cuda.amp.autocast(enabled=use_amp):
+            loss = self.train_step(model=model, samples=samples)
 
             # after_train_step()
-            if use_amp:
-                scaler.scale(loss).backward()
-            else:
-                loss.backward()
+            # if use_amp:
+            #     model.backward(scaler.scale(loss))
+            # else:
+            #     model.backward(loss)
+            model.backward(loss)
 
             # update gradients every accum_grad_iters iterations
             if (i + 1) % accum_grad_iters == 0:
-                if use_amp:
-                    scaler.step(optimizer)
-                    scaler.update()                     
-                else:    
-                    optimizer.step()
-                optimizer.zero_grad()
+                # if use_amp:
+                #     scaler.step(optimizer)
+                #     scaler.update()
+                # else:
+                #     model.step()
+                model.step()
                 # if self.cfg.wandb_log:
                 if self.cfg.run_cfg.wandb_log:
                     wandb.log({"epoch": inner_epoch, "loss": loss})
+            step_time = time.time() - start_time
+            total_step_time += step_time
+            if global_step % iters_per_epoch == 0 and global_step != 0 and get_rank() == 0:
+                one_step_bs = batch_size * accum_grad_iters * get_world_size() * iters_per_epoch
+                print(' At step {}, the throughput is {:2f} Samples/s'.format(
+                    global_step * accum_grad_iters,
+                    one_step_bs / total_step_time),
+                    flush=True)
+                total_step_time = 0.0
             metric_logger.update(loss=loss.item())
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 

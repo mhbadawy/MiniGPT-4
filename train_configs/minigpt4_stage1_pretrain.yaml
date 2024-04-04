@@ -33,10 +33,10 @@ run:
   init_lr: 1e-4
   min_lr: 8e-5
   warmup_lr: 1e-6
-
+  accum_grad_iters: 5
   weight_decay: 0.05
   max_epoch: 4
-  num_workers: 4
+  num_workers: 15
   warmup_steps: 5000
   iters_per_epoch: 5000
 
@@ -53,6 +53,8 @@ run:
   world_size: 1
   dist_url: "env://"
   distributed: True
+  dist_backend: deepspeed
+  ds_config_path: "/ibex/user/badawimh/deepspeed/new/MiniGPT-4/train_configs/deepspeed_config.yaml"
 
   wandb_log: True
   job_name: minigpt4_pretrain

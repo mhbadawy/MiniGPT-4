@@ -38,11 +38,12 @@ class Config:
 
         # Override the default configuration with user options.
         self.config = OmegaConf.merge(
-            runner_config, model_config, dataset_config,evaluation_dataset_config, user_config
+            runner_config, model_config, dataset_config, evaluation_dataset_config, user_config
         )
 
     def _validate_runner_config(self, runner_config):
         """
+        This method validates the configuration, such that
         This method validates the configuration, such that
             1) all the user specified options are valid;
             2) no type mismatches between the user specified options and the config.
@@ -111,7 +112,6 @@ class Config:
             )
 
         return dataset_config
-
 
     @staticmethod
     def build_evaluation_dataset_config(config):
@@ -257,7 +257,7 @@ class ConfigValidator:
         """
         for k, v in config.items():
             assert (
-                k in self.arguments
+                    k in self.arguments
             ), f"""{k} is not a valid argument. Support arguments are {self.format_arguments()}."""
 
             if self.arguments[k].type is not None:
@@ -268,7 +268,7 @@ class ConfigValidator:
 
             if self.arguments[k].choices is not None:
                 assert (
-                    v in self.arguments[k].choices
+                        v in self.arguments[k].choices
                 ), f"""{k} must be one of {self.arguments[k].choices}."""
 
         return config
@@ -442,6 +442,7 @@ def create_runner_config_validator():
         help="Number of processes participating in the job.",
     )
     validator.add_argument("dist_url", type=str)
+    validator.add_argument("dist_backend", type=str)
     validator.add_argument("distributed", type=bool)
     # add arguments to opt using distributed sampler during evaluation or not
     validator.add_argument(
